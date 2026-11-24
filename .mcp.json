@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "rkotlin": {
+      "args": [
+        "mcp"
+      ],
+      "command": "rkotlin"
+    }
+  }
+}
