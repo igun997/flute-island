@@ -15,6 +15,21 @@ data class RawNotice(
     val postedAt: Long,
 )
 
+/** What the island does with one notification. */
+sealed interface Decision {
+    /** Pop it up in the island. */
+    data class Show(val alert: Alert) : Decision
+
+    /** Too quiet to interrupt for: file it under Recent, no popup. (Only with "every app uses the island".) */
+    data class Quiet(val alert: Alert) : Decision
+
+    /** Nothing to show (empty group header...), but it must not stay in the shade either. */
+    data object Dismiss : Decision
+
+    /** Not ours to touch: leave the notification exactly where it is. */
+    data object Ignore : Decision
+}
+
 object NotificationMapper {
     const val MAX_TEXT = 240
     const val MAX_TITLE = 80
@@ -60,6 +75,25 @@ object NotificationMapper {
             postedAt = raw.postedAt,
             actionKey = raw.key,
         )
+    }
+
+    /**
+     * The island's policy. Ongoing things (calls, music players, downloads, foreground services) are never touched:
+     * they are live controls and Android would not let us remove them anyway. With [allApps] every other app goes
+     * through the island, the block list is ignored, and quiet notifications are filed under Recent instead of
+     * being dropped, so the island is the only place notifications appear.
+     */
+    fun decide(raw: RawNotice, ownPackage: String, blocked: Set<String>, allApps: Boolean, loud: Boolean): Decision {
+        if (raw.packageName == ownPackage) return Decision.Ignore
+        if (raw.isOngoing || raw.isMediaStyle || raw.category in DROPPED_CATEGORIES) return Decision.Ignore
+        if (!allApps && raw.packageName in blocked) return Decision.Ignore
+        if (raw.isGroupSummary) return if (allApps) Decision.Dismiss else Decision.Ignore
+        val alert = map(raw, ownPackage, emptySet()) ?: return Decision.Ignore
+        return when {
+            loud -> Decision.Show(alert)
+            allApps -> Decision.Quiet(alert)
+            else -> Decision.Ignore
+        }
     }
 
     private fun String?.clean(max: Int): String {

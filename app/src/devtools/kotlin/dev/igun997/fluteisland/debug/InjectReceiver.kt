@@ -85,6 +85,10 @@ class InjectReceiver : BroadcastReceiver() {
             }
             "clearrecent" -> c.clearRecent(now)
             "cleanshell" -> IslandRuntime.cancelShellNotifications?.invoke()
+            "allapps" -> SettingsStore.update { it.copy(allApps = s("value", "true") == "true") }
+            "block" -> SettingsStore.update { it.copy(blockedPackages = it.blockedPackages + s("value")) }
+            "unblock" -> SettingsStore.update { it.copy(blockedPackages = it.blockedPackages - s("value")) }
+            "cover" -> SettingsStore.update { it.copy(coverStatusBar = s("value", "true") == "true") }
             "quiet" -> SettingsStore.update { it.copy(quietMode = s("value", "true") == "true") }
             "scale" -> SettingsStore.update { it.copy(sizeScale = s("value", "1").toFloat()) }
             "clear" -> { c.clearAlerts(); c.setPanel(Panel.NONE, now) }

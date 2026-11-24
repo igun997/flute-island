@@ -60,11 +60,14 @@ data class IslandMetrics(
     val hasCutout: Boolean,
     /** Bottom edge of the system status bar, from the window top. Cards start below it so they never sit under its icons. */
     val statusBarBottom: Float = 0f,
+    /** The status bar is covered: the pill is part of a full-width bar and gets roomier slots (and richer effects). */
+    val wide: Boolean = false,
 ) {
+    val slot: Float get() = if (wide) WIDE_SLOT else SLOT
     val compactHeight: Float get() = if (hasCutout) (camCy * 2).coerceIn(28f, 38f) else 30f
     /** Space reserved for the lens itself; the rest of the cut-out bounding box is just padding. */
     val gap: Float get() = minOf(cutoutWidth, 40f)
-    val compactWidth: Float get() = gap + 2 * SLOT
+    val compactWidth: Float get() = gap + 2 * slot
     val panelWidth: Float get() = min(screenWidth - 16f, 372f)
 
     /** The pill's top edge: centred on the camera when there is a cut-out, otherwise a small margin. */
@@ -75,6 +78,7 @@ data class IslandMetrics(
 
     companion object {
         const val SLOT = 46f
+        const val WIDE_SLOT = 58f
         const val MAX_TICKET_ROWS = 4
 
         fun fallback(screenWidth: Float) = IslandMetrics(screenWidth, screenWidth / 2f, 15f, 40f, false)

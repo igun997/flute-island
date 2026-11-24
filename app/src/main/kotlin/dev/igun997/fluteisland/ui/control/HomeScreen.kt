@@ -9,6 +9,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
@@ -134,8 +136,10 @@ fun HomeScreen(dark: Boolean, onNavigate: (Screen) -> Unit) {
             PreviewCard(dark, Modifier.entrance(1))
         }
         item { SetupCard(overlayOk, listenerOk, connected, overlayShown, Modifier.entrance(2)) }
+        item { GesturesCard(Modifier.entrance(3)) }
         item { ModeCard(settings.mode, Modifier.entrance(3)) }
         item { NotificationsCard(onNavigate, Modifier.entrance(4)) }
+        item { StatusBarCard(tick, Modifier.entrance(4)) }
         item { WeatherCard(onNavigate, Modifier.entrance(5)) }
         item { JiraCard(onNavigate, Modifier.entrance(6)) }
         item { AppearanceCard(Modifier.entrance(7)) }
@@ -327,10 +331,55 @@ private fun PermissionRow(title: String, subtitle: String, granted: Boolean, onG
 }
 
 @Composable
+private fun StatusBarCard(permissionTick: Int, modifier: Modifier) {
+    val c = LocalControlColors.current
+    val ctx = LocalContext.current
+    val settings by SettingsStore.flow.collectAsState()
+    var phoneOk by remember(permissionTick) { mutableStateOf(Perms.phoneStateGranted(ctx)) }
+    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { phoneOk = it }
+    FluidCard(modifier) {
+        SectionHeader("Status bar", "Let the island be the top bar", Glyphs.Settings)
+        SwitchRow(
+            "Cover the status bar",
+            "Hides the system icons. The island shows the clock, wifi, signal for each SIM and battery. Swipe down still opens the shade as usual.",
+            settings.coverStatusBar,
+        ) { v -> SettingsStore.update { it.copy(coverStatusBar = v) } }
+        if (settings.coverStatusBar && !phoneOk) {
+            Spacer(Modifier.height(6.dp))
+            Hint("Allow phone state to show signal for each SIM. Without it only your default SIM is shown.")
+            Spacer(Modifier.height(8.dp))
+            SecondaryButton("Allow phone state", Modifier.fillMaxWidth()) { ask.launch(android.Manifest.permission.READ_PHONE_STATE) }
+        }
+    }
+}
+
+@Composable
+private fun GesturesCard(modifier: Modifier) {
+    val c = LocalControlColors.current
+    FluidCard(modifier) {
+        SectionHeader("Gestures", "Everything you can do on the island", Glyphs.Play)
+        listOf(
+            "Tap" to "Open the panel: music, Recent, Jira or weather",
+            "Hold" to "Open this control room (a line fills as you hold)",
+            "Swipe left or right" to "Switch to the next panel",
+            "Swipe up" to "Close a panel or dismiss an alert",
+        ).forEach { (gesture, what) ->
+            Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.clip(RoundedCornerShape(10.dp)).background(c.accent.copy(alpha = 0.14f)).padding(horizontal = 10.dp, vertical = 5.dp)) {
+                    Text(gesture, color = c.accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                }
+                Spacer(Modifier.width(12.dp))
+                Text(what, color = c.text, fontSize = 14.sp, modifier = Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
 private fun ModeCard(mode: Mode, modifier: Modifier) {
     val c = LocalControlColors.current
     FluidCard(modifier) {
-        SectionHeader("Mode", "Long-press the island to switch", Glyphs.Wrench)
+        SectionHeader("Mode", "Tools adds your Jira board to the island", Glyphs.Wrench)
         Segmented(listOf(Mode.NORMAL to "Everyday", Mode.TOOLS to "Tools"), mode) { m -> SettingsStore.update { it.copy(mode = m) } }
         Spacer(Modifier.height(10.dp))
         AnimatedContent(mode, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "modeText") { m ->
@@ -350,9 +399,16 @@ private fun NotificationsCard(onNavigate: (Screen) -> Unit, modifier: Modifier) 
         SectionHeader("Alerts", null, Glyphs.Bell)
         SwitchRow("Notifications", "WhatsApp and other apps", settings.notificationsEnabled) { v -> SettingsStore.update { it.copy(notificationsEnabled = v) } }
         SwitchRow("Stay out of the way", "Hide in games and fullscreen apps; hold alerts until you are back", settings.quietMode) { v -> SettingsStore.update { it.copy(quietMode = v) } }
-        SwitchRow("Take over notifications", "The island replaces the shade: notifications are cleared once shown, and kept under Recent", settings.takeOver) { v -> SettingsStore.update { it.copy(takeOver = v) } }
+        SwitchRow(
+            "Every app uses the island",
+            "No default notifications at all: every app shows here and under Recent. Calls, music players and downloads stay as they are.",
+            settings.allApps,
+        ) { v -> SettingsStore.update { it.copy(allApps = v) } }
+        SwitchRow("Take over notifications", "The island replaces the shade: notifications are cleared once shown, and kept under Recent", settings.takeOver || settings.allApps) { v ->
+            if (!settings.allApps) SettingsStore.update { it.copy(takeOver = v) }
+        }
         SwitchRow("Now playing", "Spotify and other players", settings.mediaEnabled) { v -> SettingsStore.update { it.copy(mediaEnabled = v) } }
-        NavRow("Apps", "$blocked muted", "Choose which apps may use the island") { onNavigate(Screen.APPS) }
+        if (!settings.allApps) NavRow("Apps", "$blocked muted", "Choose which apps may use the island") { onNavigate(Screen.APPS) }
         SliderRow("Alert stays for", "${settings.alertSeconds} s", settings.alertSeconds.toFloat(), 2f..12f, steps = 9) { v ->
             SettingsStore.update { it.copy(alertSeconds = v.toInt()) }
         }

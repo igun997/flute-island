@@ -8,13 +8,15 @@ gets out of the way in games and fullscreen apps.
 
 | | |
 |---|---|
-| **Notifications** | WhatsApp (own accent), Telegram and every other app, per-app on/off. Optional *Take over*: the notification is removed from the shade once the island showed it, tapping the island still opens the right chat. |
+| **Notifications** | WhatsApp (own accent), Telegram and every other app, per-app on/off. Optional *Take over* removes the notification from the shade once the island showed it (tapping the island still opens the right chat); *Every app uses the island* goes further: the block list is ignored, quiet notifications go straight to Recent, and only live controls (calls, players, downloads) stay in the shade. |
 | **Now playing** | Spotify and any media session: album art, equalizer, progress, previous / play-pause / next. |
-| **Tools mode** | Long-press the island. Polls Jira and pops up a ticket the moment it is reopened; the panel lists them, one tap opens the ticket. |
+| **Gestures** | Tap opens a panel, hold opens the control room (a line fills while you hold), swipe left/right switches panels, swipe up closes. The island shows a one-time tip, and the pill squashes and lights up under your finger. |
+| **Tools mode** | Switch it in the control room. Polls Jira and pops up a ticket the moment it is reopened; the panel lists them, one tap opens the ticket. |
 | **Weather** | Open-Meteo (no API key). Icon + temperature next to the camera, animated panel on tap, city search. |
 | **Theme** | Follows the phone's dark/light mode, or flip it with the sun/moon button (long-press = back to auto). The small pill stays black so it merges with the lens. |
 | **Stay out of the way** | Hidden (and alerts held, stale ones dropped) while a game or any fullscreen app is in front. |
 | **First-run intro** | A Lottie logo reveal (the island drops in, a palm island rises) with staggered title and feature chips, once after install. |
+| **Cover the status bar** | Optional. The island draws its own black bar over the system one (clock, wifi, signal for each SIM, battery) and merges with it: no outline, roomier slots, a 7-bar equalizer and a pulsing album ring. The bar ignores touches, so a swipe down pulls the shade exactly as usual; with the shade open it grows, rounds its corners, hides the shade's own clock row and shows each SIM's carrier. Per-SIM signal needs the optional *phone state* permission, otherwise only the default SIM shows. |
 | **Control room** | Fluid Compose UI: live preview of the real island, setup checklist, mode, alerts, weather, Jira, look & feel. Adaptive grid for wider screens. |
 
 ## Why an accessibility service?

@@ -40,6 +40,18 @@ object IslandRuntime {
     val statusBarVisible: StateFlow<Boolean> = _statusBarVisible.asStateFlow()
     fun setStatusBarVisible(visible: Boolean) { _statusBarVisible.value = visible }
 
+    /** True while the notification shade / quick settings are pulled down. */
+    private val _shadeOpen = MutableStateFlow(false)
+    val shadeOpen: StateFlow<Boolean> = _shadeOpen.asStateFlow()
+    fun setShadeOpen(open: Boolean) { _shadeOpen.value = open }
+
+    private val _landscape = MutableStateFlow(false)
+    val landscape: StateFlow<Boolean> = _landscape.asStateFlow()
+    fun setLandscape(value: Boolean) { _landscape.value = value }
+
+    /** Pulls the notification shade down, as a swipe from the top edge would. Set by the accessibility service. */
+    @Volatile var openShade: (() -> Unit)? = null
+
     /** Whether the app in the foreground declares itself a game. */
     private val _inGame = MutableStateFlow(false)
     val inGame: StateFlow<Boolean> = _inGame.asStateFlow()

@@ -1,5 +1,10 @@
 package dev.igun997.fluteisland.ui.island
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -85,17 +90,17 @@ internal fun GlyphIcon(glyph: ImageVector, tint: Color, size: Int, modifier: Mod
 @Composable
 internal fun IdleContent(p: Presentation.Idle, m: IslandMetrics, c: IslandPalette, data: IslandData) {
     Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.width(IslandMetrics.SLOT.dp).padding(start = 9.dp), contentAlignment = Alignment.CenterStart) {
+        Box(Modifier.width(m.slot.dp).padding(start = 9.dp), contentAlignment = Alignment.CenterStart) {
             p.weather?.let { w ->
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                     // One gentle loop each time the pill appears, then it rests: idle must cost nothing.
-                    LottieIcon(Anim.weather(w.kind, w.isDay), Modifier.size(16.dp), iterations = 1)
-                    Label(Temperature.format(w.tempC, data.celsius), c.onPill, 12, FontWeight.SemiBold)
+                    LottieIcon(Anim.weather(w.kind, w.isDay), Modifier.size(if (m.wide) 20.dp else 16.dp), iterations = 1)
+                    Label(Temperature.format(w.tempC, data.celsius), c.onPill, if (m.wide) 13 else 12, FontWeight.SemiBold)
                 }
             }
         }
         Spacer(Modifier.width(m.gap.dp))
-        Box(Modifier.width(IslandMetrics.SLOT.dp).padding(end = 10.dp), contentAlignment = Alignment.CenterEnd) {
+        Box(Modifier.width(m.slot.dp).padding(end = 10.dp), contentAlignment = Alignment.CenterEnd) {
             if (p.tools) {
                 val tint = if (p.ticketCount > 0) c.coral else c.muted
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -110,12 +115,13 @@ internal fun IdleContent(p: Presentation.Idle, m: IslandMetrics, c: IslandPalett
 @Composable
 internal fun MediaCompactContent(media: MediaInfo, m: IslandMetrics, c: IslandPalette) {
     Row(Modifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.width(IslandMetrics.SLOT.dp).padding(start = 10.dp), contentAlignment = Alignment.CenterStart) {
-            AlbumArt(media, c, 21, 6)
+        Box(Modifier.width(m.slot.dp).padding(start = 10.dp), contentAlignment = Alignment.CenterStart) {
+            if (m.wide) PulsingArt(media, c) else AlbumArt(media, c, 21, 6)
         }
         Spacer(Modifier.width(m.gap.dp))
-        Box(Modifier.width(IslandMetrics.SLOT.dp).padding(end = 10.dp), contentAlignment = Alignment.CenterEnd) {
-            Equalizer(c.accent, media.playing, Modifier.size(20.dp))
+        Box(Modifier.width(m.slot.dp).padding(end = 10.dp), contentAlignment = Alignment.CenterEnd) {
+            if (m.wide) Equalizer(c.accent, media.playing, Modifier.size(width = 36.dp, height = 20.dp), bars = 7)
+            else Equalizer(c.accent, media.playing, Modifier.size(20.dp))
         }
     }
 }
@@ -125,7 +131,7 @@ internal fun MediaCompactContent(media: MediaInfo, m: IslandMetrics, c: IslandPa
  * plays, so it must be far cheaper than a looping Lottie. Paused = still bars, zero frames.
  */
 @Composable
-internal fun Equalizer(color: Color, playing: Boolean, modifier: Modifier = Modifier) {
+internal fun Equalizer(color: Color, playing: Boolean, modifier: Modifier = Modifier, bars: Int = 4) {
     val time = produceState(0f, playing) {
         if (!playing) return@produceState
         var last = 0L
@@ -139,8 +145,7 @@ internal fun Equalizer(color: Color, playing: Boolean, modifier: Modifier = Modi
         }
     }
     Canvas(modifier) {
-        val bars = SPEED.size
-        val gap = size.width * 0.14f
+        val gap = size.width * (if (bars > 4) 0.09f else 0.14f)
         val barW = (size.width - gap * (bars - 1)) / bars
         val t = time.value
         for (i in 0 until bars) {
@@ -152,9 +157,25 @@ internal fun Equalizer(color: Color, playing: Boolean, modifier: Modifier = Modi
 }
 
 private const val FRAME_NS = 33_000_000L
-private val SPEED = floatArrayOf(5.2f, 6.8f, 4.4f, 7.4f)
-private val PHASE = floatArrayOf(0f, 1.3f, 2.4f, 0.7f)
-private val REST = floatArrayOf(0.45f, 0.8f, 0.6f, 0.35f)
+private val SPEED = floatArrayOf(5.2f, 6.8f, 4.4f, 7.4f, 5.9f, 4.9f, 6.3f)
+private val PHASE = floatArrayOf(0f, 1.3f, 2.4f, 0.7f, 2.0f, 3.1f, 1.7f)
+private val REST = floatArrayOf(0.45f, 0.8f, 0.6f, 0.35f, 0.7f, 0.5f, 0.4f)
+
+/** Wide (covered bar) variant: the album art with a soft ring that pulses outward while music plays. */
+@Composable
+internal fun PulsingArt(media: MediaInfo, c: IslandPalette) {
+    val t = rememberInfiniteTransition(label = "artPulse")
+    val pulse by t.animateFloat(0f, 1f, infiniteRepeatable(tween(1800, easing = FastOutSlowInEasing)), label = "ring")
+    Box(Modifier.size(28.dp), contentAlignment = Alignment.Center) {
+        if (media.playing) {
+            Canvas(Modifier.fillMaxSize()) {
+                val r = size.minDimension / 2f
+                drawCircle(c.accent.copy(alpha = (1f - pulse) * 0.55f), radius = r * (0.7f + 0.3f * pulse), style = androidx.compose.ui.graphics.drawscope.Stroke(1.5.dp.toPx()))
+            }
+        }
+        AlbumArt(media, c, 22, 7)
+    }
+}
 
 @Composable
 internal fun AlbumArt(media: MediaInfo, c: IslandPalette, size: Int, radius: Int) {

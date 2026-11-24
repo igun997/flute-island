@@ -4,6 +4,8 @@ import android.app.Notification
 import android.content.ComponentName
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import dev.igun997.fluteisland.core.Alert
+import dev.igun997.fluteisland.core.Decision
 import dev.igun997.fluteisland.core.NotificationMapper
 import dev.igun997.fluteisland.core.RawNotice
 import dev.igun997.fluteisland.data.SettingsStore
@@ -60,21 +62,38 @@ class IslandListenerService : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         val set = SettingsStore.value
         if (!set.enabled || !set.notificationsEnabled) return
-        if (!isLoudEnough(sbn)) return
 
-        val alert = NotificationMapper.map(toRaw(sbn), packageName, set.blockedPackages) ?: return
-        val signature = alert.title + "|" + alert.text
-        if (lastSeen[sbn.key] == signature) return
-        lastSeen[sbn.key] = signature
-        IslandRuntime.post(alert, sbn.notification.contentIntent)
-
-        // "Take over": the island becomes the only place this notification shows up. The tap action was
-        // captured above, so tapping the island still opens the right chat.
-        if (set.takeOver) {
-            takenOver.add(sbn.key)
-            runCatching { cancelNotification(sbn.key) }
-                .onFailure { takenOver.remove(sbn.key); android.util.Log.w("IslandTakeover", "cancel failed for ${sbn.key}", it) }
+        val decision = NotificationMapper.decide(toRaw(sbn), packageName, set.blockedPackages, set.allApps, isLoudEnough(sbn))
+        when (decision) {
+            Decision.Ignore -> return
+            Decision.Dismiss -> removeFromShade(sbn.key)
+            is Decision.Quiet -> {
+                if (!isNew(sbn.key, decision.alert)) return
+                IslandRuntime.controller.recordOnly(decision.alert)
+                removeFromShade(sbn.key)
+            }
+            is Decision.Show -> {
+                if (!isNew(sbn.key, decision.alert)) return
+                IslandRuntime.post(decision.alert, sbn.notification.contentIntent)
+                // "Take over" (always, in every-app mode): the island is the only place it shows up. The tap action
+                // was captured above, so tapping the island still opens the right chat.
+                if (set.takeOver || set.allApps) removeFromShade(sbn.key)
+            }
         }
+    }
+
+    /** Re-posts of an unchanged notification stay quiet. */
+    private fun isNew(key: String, alert: Alert): Boolean {
+        val signature = alert.title + "|" + alert.text
+        if (lastSeen[key] == signature) return false
+        lastSeen[key] = signature
+        return true
+    }
+
+    private fun removeFromShade(key: String) {
+        takenOver.add(key)
+        runCatching { cancelNotification(key) }
+            .onFailure { takenOver.remove(key); android.util.Log.w("IslandTakeover", "cancel failed for $key", it) }
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {

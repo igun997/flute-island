@@ -325,4 +325,13 @@ class IslandControllerTest {
         c.cyclePanel(1, 0)
         assertEquals(Panel.NONE, c.snapshot.panel)
     }
+
+    @Test
+    fun recordOnlyFilesAnAlertWithoutShowingIt() {
+        val c = controller()
+        c.recordOnly(alert("q"))
+        assertNull(c.snapshot.current)
+        assertTrue(c.snapshot.queue.isEmpty())
+        assertEquals(listOf("q"), c.snapshot.recent.map { it.id })
+    }
 }

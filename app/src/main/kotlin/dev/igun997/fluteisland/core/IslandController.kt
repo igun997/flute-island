@@ -68,6 +68,11 @@ class IslandController(
         }
     }
 
+    /** File an alert under Recent without showing anything (quiet notifications in "every app" mode). */
+    fun recordOnly(alert: Alert) = edit { s ->
+        s.copy(recent = (listOf(alert) + s.recent.filterNot { it.id == alert.id }).take(MAX_RECENT))
+    }
+
     /** The source notification went away: stop showing/queueing it. */
     fun retract(id: String, now: Long) = edit { s ->
         val queue = s.queue.filterNot { it.id == id }

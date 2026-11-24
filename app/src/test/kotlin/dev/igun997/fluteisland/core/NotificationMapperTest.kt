@@ -3,6 +3,7 @@ package dev.igun997.fluteisland.core
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class NotificationMapperTest {
@@ -69,5 +70,39 @@ class NotificationMapperTest {
         assertEquals(NotificationMapper.MAX_TEXT, a.text.length)
         assertEquals('\u2026', a.text.last())
         assertNotNull(a)
+    }
+
+    private fun decide(r: RawNotice, blocked: Set<String> = NotificationMapper.DEFAULT_BLOCKED, all: Boolean = false, loud: Boolean = true) =
+        NotificationMapper.decide(r, own, blocked, all, loud)
+
+    @Test
+    fun normalModeShowsLoudAndIgnoresQuietAndBlocked() {
+        assertEquals(Source.WHATSAPP, (decide(raw()) as Decision.Show).alert.source)
+        assertEquals(Decision.Ignore, decide(raw(), loud = false))
+        assertEquals(Decision.Ignore, decide(raw(pkg = "com.android.systemui")))
+    }
+
+    @Test
+    fun allAppsModeIgnoresTheBlockListAndKeepsQuietOnesInTheInbox() {
+        assertTrue(decide(raw(pkg = "com.android.systemui"), all = true) is Decision.Show)
+        assertTrue(decide(raw(), blocked = setOf("com.whatsapp"), all = true) is Decision.Show)
+        assertTrue(decide(raw(), all = true, loud = false) is Decision.Quiet)
+    }
+
+    @Test
+    fun groupSummariesAreOnlyDismissedInAllAppsMode() {
+        assertEquals(Decision.Ignore, decide(raw(summary = true)))
+        assertEquals(Decision.Dismiss, decide(raw(summary = true), all = true))
+    }
+
+    @Test
+    fun liveControlsAreNeverTouchedInAnyMode() {
+        for (all in listOf(false, true)) {
+            assertEquals(Decision.Ignore, decide(raw(ongoing = true), all = all))
+            assertEquals(Decision.Ignore, decide(raw(mediaStyle = true), all = all))
+            assertEquals(Decision.Ignore, decide(raw(category = "call"), all = all))
+            assertEquals(Decision.Ignore, decide(raw(category = "progress"), all = all))
+            assertEquals(Decision.Ignore, decide(raw(pkg = own), all = all))
+        }
     }
 }

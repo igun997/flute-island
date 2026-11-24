@@ -3,6 +3,9 @@ package dev.igun997.fluteisland.ui.island
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -33,6 +36,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.rememberUpdatedState
@@ -44,6 +50,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -51,6 +58,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -85,6 +93,8 @@ data class IslandData(
     val media: MediaInfo? = null,
     val weather: Weather? = null,
     val blendCamera: Boolean = true,
+    /** The status bar is covered: the compact pill becomes part of that bar (same black, no outline). */
+    val cover: Boolean = false,
     val recent: List<Alert> = emptyList(),
 )
 
@@ -136,8 +146,19 @@ fun IslandSurface(
     val compactPalette = if (data.blendCamera && metrics.hasCutout) IslandPalette.Dark else palette
     val isCompact = presentation is Presentation.Idle || presentation is Presentation.MediaCompact
     val pillColors = if (isCompact) compactPalette else palette
-    val pillColor by animateColorAsState(pillColors.pill, tween(220), label = "pill")
-    val borderColor by animateColorAsState(pillColors.border, tween(220), label = "pillBorder")
+    val pillColor by animateColorAsState(if (isCompact && data.cover) Color.Black else pillColors.pill, tween(220), label = "pill")
+    // In cover mode the small pill is just the middle of the black bar: no outline, so the two read as one piece.
+    val borderColor by animateColorAsState(if (isCompact && data.cover) Color.Transparent else pillColors.border, tween(220), label = "pillBorder")
+
+    // Touch feedback, so people can feel the gestures work: the pill squashes slightly and lights up while pressed, and a
+    // line fills along its bottom edge while holding (a long press opens the settings when it completes).
+    var pressed by remember { mutableStateOf(false) }
+    val press by animateFloatAsState(if (pressed) 1f else 0f, spring(dampingRatio = 0.6f, stiffness = 700f), label = "press")
+    val hold = remember { Animatable(0f) }
+    val holdMs = LocalViewConfiguration.current.longPressTimeoutMillis.toInt()
+    LaunchedEffect(pressed) {
+        if (pressed) hold.animateTo(1f, tween(holdMs, easing = LinearEasing)) else hold.snapTo(0f)
+    }
 
     val gapTarget = if (IslandSizes.isCard(presentation)) metrics.cardGap.dp else 0.dp
     val topGap by animateDpAsState(gapTarget, sizeSpec, label = "islandTop")
@@ -154,11 +175,17 @@ fun IslandSurface(
             Box(
                 Modifier
                     .size(w, h)
+                    .graphicsLayer { scaleX = 1f - 0.035f * press; scaleY = 1f - 0.035f * press }
                     .clip(shape)
                     .background(pillColor)
                     .border(1.dp, borderColor, shape)
                     .pointerInput(Unit) {
                         detectTapGestures(
+                            onPress = {
+                                pressed = true
+                                tryAwaitRelease()
+                                pressed = false
+                            },
                             onTap = { latest.onTap() },
                             onLongPress = {
                                 if (hapticsOn) haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -213,6 +240,21 @@ fun IslandSurface(
                                 Panel.NONE -> Unit
                             }
                         }
+                    }
+                }
+                // Press highlight + hold progress.
+                Box(
+                    Modifier.fillMaxSize().background(pillColors.onPill.copy(alpha = 0.09f * press + 0.07f * hold.value)),
+                )
+                Canvas(Modifier.fillMaxSize()) {
+                    // `this.size` is the canvas; the plain `size` above is the pill's target size.
+                    val canvas = this.size
+                    if (hold.value > 0.02f) {
+                        val thickness = 2.5.dp.toPx()
+                        drawRoundRect(
+                            pillColors.accent, Offset(canvas.width * 0.12f, canvas.height - thickness - 1.dp.toPx()),
+                            Size(canvas.width * 0.76f * hold.value, thickness), CornerRadius(thickness / 2),
+                        )
                     }
                 }
             }

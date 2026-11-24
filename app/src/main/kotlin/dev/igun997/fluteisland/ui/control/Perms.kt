@@ -20,6 +20,9 @@ object Perms {
 
     fun listenerGranted(ctx: Context) = NotificationManagerCompat.getEnabledListenerPackages(ctx).contains(ctx.packageName)
 
+    fun phoneStateGranted(ctx: Context) =
+        ctx.checkSelfPermission(android.Manifest.permission.READ_PHONE_STATE) == android.content.pm.PackageManager.PERMISSION_GRANTED
+
     fun openAccessibilitySettings(ctx: Context) = launch(ctx, Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
 
     /** Android 13+ greys out accessibility for apps installed from a file until this is allowed in App info. */

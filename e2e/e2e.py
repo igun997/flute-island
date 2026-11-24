@@ -189,6 +189,8 @@ def start_app():
 def sec_setup():
     sh(f"am force-stop {PKG}")
     sh(f"pm clear {PKG}")
+    # Granting a runtime permission restarts the app process, so do it now, before anything is running.
+    sh(f"pm grant {PKG} android.permission.READ_PHONE_STATE")
     adb("shell", "cmd", "notification", "disallow_listener", SERVICE, check=False)
     adb("shell", "cmd", "notification", "allow_listener", SERVICE)
     cur = sh("settings get secure enabled_accessibility_services").strip()
@@ -224,6 +226,8 @@ def sec_setup():
     t = texts(root)
     check("control room opens with the brand title", "Flute Island" in t, str(sorted(t))[:200])
     check("setup is complete (permissions granted)", "Island is live" in t)
+    time.sleep(2.5)
+    check("the one-time gesture tip was posted by the island", int(state().get("recent", "0") or 0) >= 1, str(state()))
     shot("01_control_room_top")
 
 
@@ -580,6 +584,97 @@ def sec_motion():
     launch_home()
 
 
+def sec_gestures():
+    """Hold opens the control room; every app can be routed through the island."""
+    sw, _ = screen()
+    inject(kind="clear")
+    inject(kind="weather", temp="27", code="2")
+    launch_home()
+    time.sleep(1.5)
+    sh(f"input swipe {sw // 2} 28 {sw // 2} 28 800")  # a long press on the pill
+    time.sleep(2.0)
+    focus = sh("dumpsys window | grep mCurrentFocus")
+    check("long-pressing the pill opens the control room", "MainActivity" in focus, focus.strip()[:120])
+    launch_home()
+
+    # every-app mode: a blocked app is ignored normally, and used (and removed from the shade) when the mode is on
+    inject(kind="block", value="com.android.shell")
+    inject(kind="takeover", value="false")
+    inject(kind="allapps", value="false")
+    inject(kind="clear")
+    time.sleep(7)
+    t1 = f"e2e_off_{int(time.time())}"
+    sh(f'cmd notification post -S bigtext -t "Blocked app" {t1} "should only live in the shade"')
+    time.sleep(2.5)
+    st = state()
+    check("blocked app: no island alert", st.get("current") in ("null", "None", ""), str(st))
+    check("blocked app: notification stays in the shade", shade_has(t1))
+
+    inject(kind="allapps", value="true")
+    inject(kind="clear")
+    time.sleep(1)
+    t2 = f"e2e_all_{int(time.time())}"
+    sh(f'cmd notification post -S bigtext -t "Every app" {t2} "now through the island"')
+    time.sleep(2.5)
+    st = state()
+    check("every-app mode: the blocked app now shows in the island", st.get("current") == "Every app", str(st))
+    check("every-app mode: nothing is left in the shade", not shade_has(t2))
+    inject(kind="allapps", value="false")
+    inject(kind="takeover", value="true")
+    inject(kind="unblock", value="com.android.shell")
+    inject(kind="cleanshell")
+    inject(kind="clear")
+
+
+def cover_window():
+    """(left, top, right, bottom) of the status-bar cover window, or None."""
+    out = sh("dumpsys window windows")
+    m = re.search(r"Window\{[0-9a-f]+ u0 FluteCover\}:(.*?)(?=\n  Window #|\Z)", out, re.S)
+    if not m:
+        return None
+    f = re.search(r"Frames:.*?frame=\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]", m.group(1), re.S)
+    return tuple(int(x) for x in f.groups()) if f else None
+
+
+def sec_cover():
+    """The optional full cover of the status bar: it replaces the system icons but never steals a swipe."""
+    sw, sh_ = screen()
+    launch_home()
+    inject(kind="clear")
+    inject(kind="weather", temp="27", code="2")
+    inject(kind="cover", value="true")
+    time.sleep(2.5)
+    win = cover_window()
+    check("cover window spans the whole top of the screen", win is not None and win[2] - win[0] >= sw - 2 and win[1] <= 0 and 40 <= win[3] <= 140, str(win))
+    p = shot("30_cover_on")
+    from PIL import Image
+    im = Image.open(p).convert("RGB")
+    left_black = all(sum(im.getpixel((x, 30))) < 90 for x in (110, 150, 200))
+    right_has_content = any(sum(im.getpixel((x, 30))) > 450 for x in range(sw - 190, sw - 20))
+    check("the cover is black (system icons hidden), with indicators on the right", left_black and right_has_content, f"left_black={left_black} right={right_has_content}")
+    def shade_open():
+        return "NotificationShade" in sh("dumpsys window | grep mCurrentFocus")
+
+    # a swipe down from the very top edge (outside the pill) must pull the shade, exactly like normal
+    sh("input swipe 80 4 80 900 250")
+    time.sleep(1.6)
+    check("swiping down from the top still opens the shade", shade_open())
+    p2 = shot("31_shade_with_cover")
+    im2 = Image.open(p2).convert("RGB")
+    check("the cover stays over the bar while the shade is open (the island keeps being the top bar)", luminance(im2.getpixel((110, 30))) < 40)
+    check("the shade itself is visible below the cover", luminance(im2.getpixel((110, 300))) > 120)
+    sh("cmd statusbar collapse")
+    time.sleep(1.2)
+    # swipe down on the island pill itself also opens the shade (the pill would otherwise swallow it)
+    sh(f"input swipe {sw // 2} 25 {sw // 2} 700 250")
+    time.sleep(1.6)
+    check("swiping down on the pill opens the shade too", shade_open())
+    sh("cmd statusbar collapse")
+    inject(kind="cover", value="false")
+    time.sleep(1.5)
+    check("switching the cover off removes it", cover_window() is None)
+
+
 def sec_quiet():
     """Games and fullscreen apps: the island must stay out of the way and hold alerts until they end."""
     sw, _ = screen()
@@ -621,6 +716,8 @@ SECTIONS = [
     ("island geometry and alerts", sec_island_geometry),
     ("real notification and take-over", sec_real_notification),
     ("animation continuity", sec_motion),
+    ("gestures", sec_gestures),
+    ("status bar cover", sec_cover),
     ("quiet mode", sec_quiet),
     ("inbox", sec_inbox),
     ("media", sec_media),

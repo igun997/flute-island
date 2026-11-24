@@ -229,6 +229,16 @@ class OverlayHost(private val service: AccessibilityService) : LifecycleOwner, S
         }
     }
 
+    /** Re-adds the pill's window so it stacks above windows added since (the status bar cover). */
+    fun bringToFront() {
+        if (view == null) return
+        removeView()
+        ensureView()
+        val set = SettingsStore.value
+        val state = controller.snapshot
+        onTarget(state, set, landscape.value)
+    }
+
     private fun removeView() {
         val v = view ?: return
         runCatching { wm.removeViewImmediate(v) }
@@ -274,8 +284,9 @@ class OverlayHost(private val service: AccessibilityService) : LifecycleOwner, S
                 cutoutWidth = cut.width() / eff,
                 hasCutout = true,
                 statusBarBottom = statusBarHeightPx() / eff,
+                wide = SettingsStore.value.coverStatusBar,
             )
-        } else IslandMetrics.fallback(screenWpx / eff).copy(statusBarBottom = statusBarHeightPx() / eff)
+        } else IslandMetrics.fallback(screenWpx / eff).copy(statusBarBottom = statusBarHeightPx() / eff, wide = SettingsStore.value.coverStatusBar)
     }
 
     private fun statusBarHeightPx(): Float {
@@ -311,7 +322,7 @@ class OverlayHost(private val service: AccessibilityService) : LifecycleOwner, S
             ThemeMode.LIGHT -> false
         }
         val eff = service.resources.displayMetrics.density * settings.sizeScale
-        val metrics = remember(settings.sizeScale) { metrics(settings.sizeScale) }
+        val metrics = remember(settings.sizeScale, settings.coverStatusBar) { metrics(settings.sizeScale) }
         val presentation = if (snap == null) Presentation.Hidden else IslandController.present(state, 0)
 
         val actions = remember { buildActions() }
@@ -324,6 +335,7 @@ class OverlayHost(private val service: AccessibilityService) : LifecycleOwner, S
             media = state.media,
             weather = state.weather,
             blendCamera = settings.blendCamera,
+            cover = settings.coverStatusBar,
             recent = state.recent,
         )
         CompositionLocalProvider(LocalDensity provides Density(eff, 1f)) {
@@ -353,7 +365,8 @@ class OverlayHost(private val service: AccessibilityService) : LifecycleOwner, S
             },
             onLongPress = {
                 touch()
-                SettingsStore.update { it.copy(mode = if (it.mode == Mode.NORMAL) Mode.TOOLS else Mode.NORMAL) }
+                controller.setPanel(Panel.NONE, IslandRuntime.now())
+                service.startActivity(Intent(service, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             },
             onSwipeUp = {
                 touch()
@@ -363,7 +376,12 @@ class OverlayHost(private val service: AccessibilityService) : LifecycleOwner, S
             onSwipeDown = {
                 touch()
                 val s = controller.snapshot
-                if (s.panel == Panel.NONE && s.current == null) controller.togglePanel(IslandRuntime.now())
+                if (SettingsStore.value.coverStatusBar) {
+                    // With the status bar covered a swipe down must do what it always does: pull the shade.
+                    IslandRuntime.openShade?.invoke()
+                } else if (s.panel == Panel.NONE && s.current == null) {
+                    controller.togglePanel(IslandRuntime.now())
+                }
             },
             onSwipeLeft = { touch(); controller.cyclePanel(1, IslandRuntime.now()) },
             onSwipeRight = { touch(); controller.cyclePanel(-1, IslandRuntime.now()) },

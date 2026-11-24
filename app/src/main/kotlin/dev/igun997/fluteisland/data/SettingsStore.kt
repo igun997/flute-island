@@ -27,6 +27,12 @@ data class Settings(
     val blendCamera: Boolean = true,
     /** Remove a notification from the shade once the island has shown it (the island becomes the only surface). */
     val takeOver: Boolean = true,
+    /** Every app goes through the island (block list ignored) and nothing is left in the shade except live controls. */
+    val allApps: Boolean = false,
+    /** Draw the island's own black status bar (clock, wifi, signal per SIM, battery) over the real one. */
+    val coverStatusBar: Boolean = false,
+    /** The one-time "tap, hold, swipe" tip has been shown. */
+    val gestureHintSeen: Boolean = false,
     /** Hide the island while a game or any fullscreen app is in the foreground, and hold alerts until it ends. */
     val quietMode: Boolean = true,
     val alertSeconds: Int = 5,
@@ -123,6 +129,9 @@ object SettingsStore {
             haptics = prefs.getBoolean("haptics", d.haptics),
             blendCamera = prefs.getBoolean("blendCamera", d.blendCamera),
             takeOver = prefs.getBoolean("takeOver", d.takeOver),
+            allApps = prefs.getBoolean("allApps", d.allApps),
+            coverStatusBar = prefs.getBoolean("cover", d.coverStatusBar),
+            gestureHintSeen = prefs.getBoolean("gestureHint", d.gestureHintSeen),
             quietMode = prefs.getBoolean("quietMode", d.quietMode),
             alertSeconds = prefs.getInt("alertSeconds", d.alertSeconds).coerceIn(2, 12),
             sizeScale = prefs.getFloat("sizeScale", d.sizeScale).coerceIn(0.85f, 1.25f),
@@ -159,6 +168,9 @@ object SettingsStore {
             .putBoolean("haptics", s.haptics)
             .putBoolean("blendCamera", s.blendCamera)
             .putBoolean("takeOver", s.takeOver)
+            .putBoolean("allApps", s.allApps)
+            .putBoolean("cover", s.coverStatusBar)
+            .putBoolean("gestureHint", s.gestureHintSeen)
             .putBoolean("quietMode", s.quietMode)
             .putInt("alertSeconds", s.alertSeconds)
             .putFloat("sizeScale", s.sizeScale)

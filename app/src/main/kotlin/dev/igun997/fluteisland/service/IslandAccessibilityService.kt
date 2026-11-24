@@ -5,6 +5,8 @@ import android.content.pm.ApplicationInfo
 import android.content.res.Configuration
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityWindowInfo
+import dev.igun997.fluteisland.core.Alert
+import dev.igun997.fluteisland.core.Source
 import dev.igun997.fluteisland.data.SettingsStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -30,6 +32,7 @@ class IslandAccessibilityService : AccessibilityService() {
     private var overlay: OverlayHost? = null
     private var weather: WeatherEngine? = null
     private var jira: JiraEngine? = null
+    private var cover: CoverHost? = null
     private val gameCache = HashMap<String, Boolean>()
 
     @OptIn(FlowPreview::class)
@@ -65,10 +68,29 @@ class IslandAccessibilityService : AccessibilityService() {
             }.collectLatest { controller.setSuppressed(it, IslandRuntime.now()) }
         }
 
-        overlay = OverlayHost(this).also { it.start(s) }
+        val host = OverlayHost(this).also { it.start(s) }
+        overlay = host
+        IslandRuntime.openShade = { performGlobalAction(GLOBAL_ACTION_NOTIFICATIONS) }
+        // The cover window has to be added before the pill's so the pill stays above it.
+        cover = CoverHost(this).also { c -> c.start(s) { host.bringToFront() } }
         weather = WeatherEngine(this, s).also { it.start() }
         jira = JiraEngine(this, s).also { it.start() }
         IslandRuntime.setHostConnected(true)
+
+        // One-time tip so the gestures are discoverable: it appears as a normal alert, from the island itself.
+        s.launch {
+            delay(1_800)
+            val set = SettingsStore.value
+            if (!set.gestureHintSeen && set.enabled) {
+                SettingsStore.update { it.copy(gestureHintSeen = true) }
+                IslandRuntime.post(
+                    Alert(
+                        id = "hint:gestures", source = Source.OTHER, appName = "Flute Island", packageName = packageName,
+                        title = "Try the island", text = "Tap to open \u00B7 hold for settings \u00B7 swipe to switch", postedAt = IslandRuntime.now(),
+                    ),
+                )
+            }
+        }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -100,6 +122,19 @@ class IslandAccessibilityService : AccessibilityService() {
             w.type == AccessibilityWindowInfo.TYPE_SYSTEM && rect.top <= 0 && rect.width() >= screenW * 0.9f
         }
         IslandRuntime.setStatusBarVisible(visible)
+        // A system window pinned to the top that is much taller than the status bar is the pulled-down shade.
+        val barHeight = statusBarHeight()
+        IslandRuntime.setShadeOpen(
+            all.any { w ->
+                w.getBoundsInScreen(rect)
+                w.type == AccessibilityWindowInfo.TYPE_SYSTEM && rect.top <= 0 && rect.width() >= screenW * 0.9f && rect.height() > barHeight * 2.2f
+            },
+        )
+    }
+
+    private fun statusBarHeight(): Int {
+        val id = resources.getIdentifier("status_bar_height", "dimen", "android")
+        return if (id > 0) resources.getDimensionPixelSize(id) else (24 * resources.displayMetrics.density).toInt()
     }
 
     override fun onInterrupt() = Unit
@@ -107,6 +142,7 @@ class IslandAccessibilityService : AccessibilityService() {
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         overlay?.onConfigurationChanged(newConfig)
+        cover?.onConfigurationChanged(newConfig)
     }
 
     override fun onUnbind(intent: android.content.Intent?): Boolean {
@@ -121,6 +157,8 @@ class IslandAccessibilityService : AccessibilityService() {
 
     private fun teardown() {
         weather?.stop(); weather = null
+        cover?.destroy(); cover = null
+        IslandRuntime.openShade = null
         jira?.stop(); jira = null
         overlay?.destroy(); overlay = null
         scope?.cancel(); scope = null
