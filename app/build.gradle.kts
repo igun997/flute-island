@@ -12,8 +12,9 @@ android {
         applicationId = "dev.igun997.fluteisland"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        // CI derives both from the release tag (v1.2.3 -> 1.2.3 / 10203); local builds fall back to the defaults.
+        versionCode = providers.gradleProperty("fluteVersionCode").map(String::toInt).getOrElse(10000)
+        versionName = providers.gradleProperty("fluteVersionName").getOrElse("1.0.0")
         // Only the ABIs real phones ship with; keeps the apk small.
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
 
@@ -25,11 +26,22 @@ android {
         buildConfigField("String", "JIRA_AUTH_PROXY", "\"$jiraAuthProxy\"")
     }
 
+    // A real keystore is used when FLUTE_KEYSTORE_FILE (+ _PASSWORD, FLUTE_KEY_ALIAS, FLUTE_KEY_PASSWORD) are set, which is
+    // what the release workflow does. Without them the build is signed with the machine's debug key: fine to sideload and
+    // test, but it cannot update an app that was signed with the real key.
+    val releaseKeystore = System.getenv("FLUTE_KEYSTORE_FILE")?.takeIf { it.isNotBlank() && file(it).exists() }
+    if (releaseKeystore != null) {
+        signingConfigs.create("release") {
+            storeFile = file(releaseKeystore)
+            storePassword = System.getenv("FLUTE_KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("FLUTE_KEY_ALIAS")
+            keyPassword = System.getenv("FLUTE_KEY_PASSWORD")
+        }
+    }
+
     buildTypes {
         release {
-            // Signed with the debug key so a release build can be sideloaded for testing performance.
-            // Swap in a real keystore (signingConfigs) before distributing.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
