@@ -1,6 +1,7 @@
 # Flute Island
 
 [![Release](https://github.com/igun997/flute-island/actions/workflows/release.yml/badge.svg)](https://github.com/igun997/flute-island/actions/workflows/release.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 A light, fast **dynamic island** for Android. It hugs the front-camera cut-out, shows notifications, music, weather
 and Jira tickets, and gets out of the way in games and fullscreen apps. Built to look good and stay cheap on
@@ -24,6 +25,7 @@ low-end phones (developed and tested on a Samsung Galaxy A22: Android 13, 720x16
 - [Releases](#releases)
 - [Troubleshooting](#troubleshooting)
 - [Repository layout](#repository-layout)
+- [License](#license)
 
 ## Features
 
@@ -198,3 +200,7 @@ Create a key with `keytool -genkeypair -keystore release.keystore -alias flute-i
 Assets: the launcher icon is an adaptive vector (with a monochrome layer); Lottie files are generated procedurally
 (`design/lottie/gen.mjs`) and exported to `app/src/main/res/raw`; hero and empty-state art is generated with
 `tools/genimg.py` and shipped as small WebP.
+
+## License
+
+[MIT](LICENSE) © 2026 Indra Gunanda
