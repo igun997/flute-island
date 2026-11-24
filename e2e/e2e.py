@@ -290,7 +290,7 @@ def sec_real_notification():
     inject(kind="cleanshell")
     time.sleep(0.8)
     shot("06_takeover")
-    inject(kind="takeover", value="false")
+    inject(kind="takeover", value="true")  # leave the phone on the default (the run must not change the user's settings)
     inject(kind="clear")
     time.sleep(1.5)
 
