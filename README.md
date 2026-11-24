@@ -14,6 +14,7 @@ gets out of the way in games and fullscreen apps.
 | **Weather** | Open-Meteo (no API key). Icon + temperature next to the camera, animated panel on tap, city search. |
 | **Theme** | Follows the phone's dark/light mode, or flip it with the sun/moon button (long-press = back to auto). The small pill stays black so it merges with the lens. |
 | **Stay out of the way** | Hidden (and alerts held, stale ones dropped) while a game or any fullscreen app is in front. |
+| **First-run intro** | A Lottie logo reveal (the island drops in, a palm island rises) with staggered title and feature chips, once after install. |
 | **Control room** | Fluid Compose UI: live preview of the real island, setup checklist, mode, alerts, weather, Jira, look & feel. Adaptive grid for wider screens. |
 
 ## Why an accessibility service?

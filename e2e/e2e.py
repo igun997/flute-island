@@ -197,7 +197,22 @@ def sec_setup():
     sh("settings put secure accessibility_enabled 1")
     sh("settings put system screen_off_timeout 600000")
     sh("input keyevent KEYCODE_WAKEUP")
-    start_app()
+    sh(f"am start -n {PKG}/.MainActivity")
+    # first launch after install: the animated intro, with a call to action once the animation has played
+    cta = None
+    end = time.time() + 12
+    while time.time() < end and cta is None:
+        time.sleep(0.8)
+        cta = find_node(ui_dump(), text="Get started") or find_node(ui_dump(), desc="Get started")
+        if cta is None:
+            shot("00_intro_playing")
+    check("first launch shows the intro with a Get started button", cta is not None)
+    shot("00_intro_done")
+    if cta:
+        tap_box(cta)
+        time.sleep(2.0)
+    root = ui_dump()
+    check("tapping Get started leads to the control room", "Live preview" in texts(root) or "Flute Island" in texts(root), str(sorted(texts(root)))[:160])
     end = time.time() + 15
     bound = False
     while time.time() < end and not bound:
@@ -470,9 +485,13 @@ def sec_control_room():
             tap_box(field)
             time.sleep(0.6)
         sh("input text Bandung")
-        time.sleep(3.0)
-        t = texts(ui_dump())
-        check("City search returns results", any("Bandung" in (x or "") for x in t))
+        found = False
+        for _ in range(8):  # the geocoding call is a real network request; give it up to ~10 s
+            time.sleep(1.4)
+            if any("Bandung," in (x or "") for x in texts(ui_dump())):
+                found = True
+                break
+        check("City search returns results", found)
         shot("16_city_screen")
         sh("input keyevent KEYCODE_BACK")
         sh("input keyevent KEYCODE_BACK")
@@ -507,6 +526,58 @@ def sec_control_room():
             sh(f"input swipe {x} {y} {x} {y} 700")
         time.sleep(1.0)
     inject(kind="theme", value="auto")
+
+
+def sec_motion():
+    """The collapse animation must keep the pill centred: no sliding in from a side after the card closes."""
+    sw, _ = screen()
+    inject(kind="clear")
+    inject(kind="weather", temp="27", code="2")
+    inject(kind="theme", value="light")
+    sh("am start -a android.settings.SETTINGS")  # a white screen: the black compact pill is easy to measure
+    time.sleep(2.5)
+    sh("rm -f /sdcard/e2e_rec.mp4")
+    rec = subprocess.Popen(["adb", "shell", "screenrecord", "--time-limit", "12", "--size", f"{sw}x1600", "--bit-rate", "10000000", "/sdcard/e2e_rec.mp4"])
+    time.sleep(1.5)
+    inject(kind="notice", app="whatsapp", title="Rina", text="Halo_besok_jadi")
+    rec.wait()
+    OUT.mkdir(exist_ok=True)
+    adb("pull", "/sdcard/e2e_rec.mp4", str(OUT / "motion.mp4"))
+    frames = OUT / "motion_frames"
+    subprocess.run(["rm", "-rf", str(frames)])
+    frames.mkdir()
+    subprocess.run(["ffmpeg", "-v", "error", "-i", str(OUT / "motion.mp4"), "-vf", f"fps=30,crop={sw}:80:0:0", str(frames / "f_%04d.png")], check=True)
+    from PIL import Image
+
+    def pill(path):
+        im = Image.open(path).convert("RGB")
+        w, _ = im.size
+        px = im.load()
+        cols = [sum(1 for y in range(8, 52, 3) if sum(px[x, y]) < 150) >= 8 for x in range(w)]
+        best, start, last = (0, 0), None, None
+        for x, on in enumerate(cols):
+            if on:
+                if start is None:
+                    start = x
+                elif x - last > 45:
+                    best = (start, last) if last - start > best[1] - best[0] else best
+                    start = x
+                last = x
+        if start is not None and last - start > best[1] - best[0]:
+            best = (start, last)
+        return best
+
+    seen, off = 0, []
+    for f in sorted(frames.glob("f_*.png")):
+        a, b = pill(f)
+        if b - a > 100:
+            seen += 1
+            if abs((a + b) // 2 - sw // 2) > 6:
+                off.append((f.name, (a + b) // 2, b - a))
+    check("the pill was visible in the recording", seen > 20, f"{seen} frames")
+    check("the pill never slides in from a side (always centred on the camera)", not off, str(off[:6]))
+    inject(kind="theme", value="auto")
+    launch_home()
 
 
 def sec_quiet():
@@ -549,6 +620,7 @@ SECTIONS = [
     ("setup", sec_setup),
     ("island geometry and alerts", sec_island_geometry),
     ("real notification and take-over", sec_real_notification),
+    ("animation continuity", sec_motion),
     ("quiet mode", sec_quiet),
     ("inbox", sec_inbox),
     ("media", sec_media),

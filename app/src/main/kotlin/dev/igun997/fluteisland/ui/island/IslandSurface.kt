@@ -32,6 +32,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.rememberUpdatedState
@@ -125,7 +126,7 @@ fun IslandSurface(
     val onSettledNow by rememberUpdatedState(onSettled)
     val sizeSpec = spring<androidx.compose.ui.unit.Dp>(dampingRatio = 0.86f, stiffness = 420f)
     val w by animateDpAsState(size.width, sizeSpec, label = "islandW")
-    val h by animateDpAsState(size.height, sizeSpec, finishedListener = { onSettledNow() }, label = "islandH")
+    val h by animateDpAsState(size.height, sizeSpec, label = "islandH")
     val latest by rememberUpdatedState(actions)
     val haptic = LocalHapticFeedback.current
     val hapticsOn by rememberUpdatedState(data.haptics)
@@ -138,7 +139,13 @@ fun IslandSurface(
     val pillColor by animateColorAsState(pillColors.pill, tween(220), label = "pill")
     val borderColor by animateColorAsState(pillColors.border, tween(220), label = "pillBorder")
 
-    val topGap by animateDpAsState(if (IslandSizes.isCard(presentation)) metrics.cardGap.dp else 0.dp, sizeSpec, label = "islandTop")
+    val gapTarget = if (IslandSizes.isCard(presentation)) metrics.cardGap.dp else 0.dp
+    val topGap by animateDpAsState(gapTarget, sizeSpec, label = "islandTop")
+
+    // The window may only be trimmed once EVERY dimension has arrived. Trimming when just one (say the height) is
+    // done would clip a pill that is still narrowing, and it would then appear to re-animate from the side.
+    val arrived = w == size.width && h == size.height && topGap == gapTarget
+    LaunchedEffect(arrived, size, gapTarget) { if (arrived) onSettledNow() }
 
     // A spring can overshoot below zero; padding must not.
     Box(modifier.fillMaxSize().padding(top = topGap.coerceAtLeast(0.dp)), contentAlignment = Alignment.TopCenter) {

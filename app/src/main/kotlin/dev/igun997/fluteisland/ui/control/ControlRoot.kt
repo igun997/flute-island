@@ -5,6 +5,7 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -35,31 +36,43 @@ fun ControlRoot() {
         ThemeMode.LIGHT -> false
     }
     ControlTheme(dark) {
-        val colors = LocalControlColors.current
-        var screen by rememberSaveable { mutableStateOf(Screen.HOME) }
-        BackHandler(enabled = screen != Screen.HOME) { screen = Screen.HOME }
+        // First launch after install: the animated intro, once. Crossfades into the control room.
+        AnimatedContent(
+            targetState = settings.introSeen,
+            transitionSpec = { (fadeIn(tween(520, delayMillis = 120)) + scaleIn(tween(520, delayMillis = 120), initialScale = 0.96f)) togetherWith fadeOut(tween(380)) },
+            label = "intro",
+        ) { seen ->
+            if (seen) ControlContent(dark) else IntroScreen(onDone = { SettingsStore.update { it.copy(introSeen = true) } })
+        }
+    }
+}
 
-        Box(Modifier.fillMaxSize().background(colors.bg)) {
-            AnimatedContent(
-                targetState = screen,
-                transitionSpec = {
-                    val deeper = targetState.ordinal > initialState.ordinal
-                    if (deeper) {
-                        (slideInHorizontally(tween(320)) { it / 4 } + fadeIn(tween(260))) togetherWith
-                            (slideOutHorizontally(tween(320)) { -it / 6 } + fadeOut(tween(160)))
-                    } else {
-                        (slideInHorizontally(tween(320)) { -it / 6 } + fadeIn(tween(260))) togetherWith
-                            (slideOutHorizontally(tween(320)) { it / 4 } + fadeOut(tween(160)))
-                    }
-                },
-                label = "screen",
-            ) { s ->
-                when (s) {
-                    Screen.HOME -> HomeScreen(dark = dark, onNavigate = { screen = it })
-                    Screen.APPS -> AppsScreen(onBack = { screen = Screen.HOME })
-                    Screen.JIRA -> JiraScreen(onBack = { screen = Screen.HOME })
-                    Screen.CITY -> CityScreen(onBack = { screen = Screen.HOME })
+@Composable
+private fun ControlContent(dark: Boolean) {
+    val colors = LocalControlColors.current
+    var screen by rememberSaveable { mutableStateOf(Screen.HOME) }
+    BackHandler(enabled = screen != Screen.HOME) { screen = Screen.HOME }
+
+    Box(Modifier.fillMaxSize().background(colors.bg)) {
+        AnimatedContent(
+            targetState = screen,
+            transitionSpec = {
+                val deeper = targetState.ordinal > initialState.ordinal
+                if (deeper) {
+                    (slideInHorizontally(tween(320)) { it / 4 } + fadeIn(tween(260))) togetherWith
+                        (slideOutHorizontally(tween(320)) { -it / 6 } + fadeOut(tween(160)))
+                } else {
+                    (slideInHorizontally(tween(320)) { -it / 6 } + fadeIn(tween(260))) togetherWith
+                        (slideOutHorizontally(tween(320)) { it / 4 } + fadeOut(tween(160)))
                 }
+            },
+            label = "screen",
+        ) { s ->
+            when (s) {
+                Screen.HOME -> HomeScreen(dark = dark, onNavigate = { screen = it })
+                Screen.APPS -> AppsScreen(onBack = { screen = Screen.HOME })
+                Screen.JIRA -> JiraScreen(onBack = { screen = Screen.HOME })
+                Screen.CITY -> CityScreen(onBack = { screen = Screen.HOME })
             }
         }
     }

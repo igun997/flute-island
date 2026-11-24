@@ -209,11 +209,24 @@ class OverlayHost(private val service: AccessibilityService) : LifecycleOwner, S
                 layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
             }
         }
+        disableMoveAnimation(params)
         view = v
         lp = params
         curW = 1; curH = 1
         runCatching { wm.addView(v, params) }.onFailure { view = null; lp = null }
         IslandRuntime.setOverlayShown(view != null)
+    }
+
+    /**
+     * Some window managers animate a window's frame when it is resized or moved: the new (already correct) pixels slide
+     * from the old position, which looks like the pill gliding in from the side. PRIVATE_FLAG_NO_MOVE_ANIMATION turns
+     * that off. It is a hidden flag, so this is best effort: if it is unavailable we simply keep the default.
+     */
+    private fun disableMoveAnimation(params: WindowManager.LayoutParams) {
+        runCatching {
+            val field = WindowManager.LayoutParams::class.java.getField("privateFlags")
+            field.setInt(params, field.getInt(params) or PRIVATE_FLAG_NO_MOVE_ANIMATION)
+        }
     }
 
     private fun removeView() {
@@ -379,6 +392,7 @@ class OverlayHost(private val service: AccessibilityService) : LifecycleOwner, S
     companion object {
         /** Frames to wait after enlarging the window before the pill starts to grow. */
         const val GROW_LEAD_MS = 70L
+        private const val PRIVATE_FLAG_NO_MOVE_ANIMATION = 0x00000040
 
         private const val FLAGS_SHOWN = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
             WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or

@@ -14,6 +14,8 @@ import kotlinx.coroutines.flow.asStateFlow
 
 data class Settings(
     val enabled: Boolean = true,
+    /** The first-run intro has been shown once. */
+    val introSeen: Boolean = false,
     val mode: Mode = Mode.NORMAL,
     val themeMode: ThemeMode = ThemeMode.AUTO,
     val showIdle: Boolean = true,
@@ -111,6 +113,7 @@ object SettingsStore {
         val d = Settings()
         return Settings(
             enabled = prefs.getBoolean("enabled", d.enabled),
+            introSeen = prefs.getBoolean("introSeen", d.introSeen),
             mode = enumOf("mode", d.mode),
             themeMode = enumOf("theme", d.themeMode),
             showIdle = prefs.getBoolean("showIdle", d.showIdle),
@@ -146,6 +149,7 @@ object SettingsStore {
     private fun write(s: Settings) {
         prefs.edit()
             .putBoolean("enabled", s.enabled)
+            .putBoolean("introSeen", s.introSeen)
             .putString("mode", s.mode.name)
             .putString("theme", s.themeMode.name)
             .putBoolean("showIdle", s.showIdle)

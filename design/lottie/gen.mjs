@@ -4,7 +4,7 @@
  *   node design/lottie/gen.mjs
  *
  * Per animation it writes:
- *   app/src/main/res/raw/<name>.json                                   app export: shapes only, minified, no sid/slots/bg layer
+ *   app/src/main/res/raw/<name>.json                                        app export: shapes only, minified, no sid/slots/bg layer
  *   design/lottie-player/public/projects/flute-island/scene-N/lottie.json   player scene: export + bg layer + bgColor slot
  *   design/lottie-player/public/projects/flute-island/scene-N/controls.json
  *
@@ -45,7 +45,10 @@ const EASE = {
 const S = (k) => ({ a: 0, k });
 const P = (v) => (v && typeof v === 'object' && 'a' in v ? v : S(v));
 
-/** Explicit keys: [{ t, v:number[], e }]. `e` is the easing of the segment starting at that key. */
+/**
+ * Explicit keys: [{ t, v:number[], e }]. `e` is the easing of the segment starting at that key
+ * (defaults to io). The last key holds its value.
+ */
 function track(keys) {
   const dim = keys[0].v.length;
   const rep = (x) => Array(dim).fill(x);
@@ -53,9 +56,12 @@ function track(keys) {
     a: 1,
     k: keys.map((key, n) => {
       const out = { t: key.t, s: key.v.map(r3) };
-      if (n < keys.length - 1) out.o = { x: rep(key.e.o[0]), y: rep(key.e.o[1]) };
+      if (n < keys.length - 1) {
+        const e = key.e ?? EASE.io;
+        out.o = { x: rep(e.o[0]), y: rep(e.o[1]) };
+      }
       if (n > 0) {
-        const prev = keys[n - 1].e;
+        const prev = keys[n - 1].e ?? EASE.io;
         out.i = { x: rep(prev.i[0]), y: rep(prev.i[1]) };
       }
       return out;
@@ -135,25 +141,30 @@ function spanThrough(a0, a1, mid) {
   return norm(mid - a0) <= ccw ? ccw : ccw - TAU;
 }
 
-/** Cubic segments approximating a circular arc of signed span (<= 90 deg per segment). */
-function arcSegs(cx, cy, r, a0, span) {
+/** Cubic segments approximating an elliptical arc (rx, ry) of signed span (<= 90 deg per segment). */
+function ellArcSegs(cx, cy, rx, ry, a0, span) {
   const n = Math.max(1, Math.ceil(Math.abs(span) / (Math.PI / 2) - 1e-9));
   const step = span / n;
-  const segs = [];
-  for (let j = 0; j < n; j++) {
+  const at = (a) => [cx + rx * Math.cos(a), cy + ry * Math.sin(a)];
+  const d = (a) => [-rx * Math.sin(a), ry * Math.cos(a)];
+  return Array.from({ length: n }, (_, j) => {
     const s0 = a0 + j * step;
     const s1 = s0 + step;
-    const k = (4 / 3) * Math.tan((s1 - s0) / 4) * r;
-    const p0 = [cx + r * Math.cos(s0), cy + r * Math.sin(s0)];
-    const p1 = [cx + r * Math.cos(s1), cy + r * Math.sin(s1)];
-    segs.push({
+    const k = (4 / 3) * Math.tan((s1 - s0) / 4);
+    const p0 = at(s0);
+    const p1 = at(s1);
+    const d0 = d(s0);
+    const d1 = d(s1);
+    return {
       p0, p1,
-      c1: [p0[0] - k * Math.sin(s0), p0[1] + k * Math.cos(s0)],
-      c2: [p1[0] + k * Math.sin(s1), p1[1] - k * Math.cos(s1)],
-    });
-  }
-  return segs;
+      c1: [p0[0] + k * d0[0], p0[1] + k * d0[1]],
+      c2: [p1[0] - k * d1[0], p1[1] - k * d1[1]],
+    };
+  });
 }
+
+/** Circular arc segments. */
+const arcSegs = (cx, cy, r, a0, span) => ellArcSegs(cx, cy, r, r, a0, span);
 
 /** Straight-edged segments through pts. */
 const lineSegs = (pts, closed) => {
@@ -190,6 +201,7 @@ function toPath(segs, closed) {
   return { c: closed, v, i, o };
 }
 const poly = (pts, closed = true) => toPath(lineSegs(pts, closed), closed);
+const ellArc = (cx, cy, rx, ry, a0, span) => toPath(ellArcSegs(cx, cy, rx, ry, a0, span), false);
 
 /** Four-point sparkle: concave edges pulled toward the centre. */
 function sparkle(R) {
@@ -285,6 +297,15 @@ function streak(name, L, { x, off, top, bot, win }) {
 }
 
 // ---------------------------------------------------------------- animations
+function equalizer(L) {
+  // Five pure-white bars, centred on y=24, two bounces per loop, phase-staggered.
+  const bars = [8, 16, 24, 32, 40].map((x, i) => grp(`bar${i}`, [
+    rect([x, 24], sampled((t) => [5, 20 + 10 * Math.sin((4 * Math.PI * t) / L + i * 1.25)], L, 16), 2.5),
+    fill(hex(COL.white)),
+  ]));
+  return [layer('bars', L, bars)];
+}
+
 function sunScene(L) {
   return sunLayers(L, { x: 48, y: 48, core: 17 });
 }
@@ -366,11 +387,11 @@ function snowScene(L) {
       p: sampled((t) => {
         const u = frac(t / L + off);
         return [x + 2.2 * Math.sin(TAU * u + ph), 50 + 40 * smooth(Math.min(u / 0.8, 1)), 0];
-      }, L, 12),
+      }, L, 16),
       o: sampled((t) => {
         const u = frac(t / L + off);
         return [100 * Math.sin(Math.PI * Math.min(u / 0.8, 1))];
-      }, L, 12),
+      }, L, 16),
     }));
   return [...flakes, ...cloudLayers('snow-cloud', L, { x: 48, y: 44 })];
 }
@@ -487,8 +508,201 @@ function loadingScene(L) {
   ];
 }
 
+function messageScene(L) {
+  const scale = track([
+    { t: 0, v: [55, 55, 100], e: EASE.out },
+    { t: 10, v: [112, 112, 100], e: EASE.io },
+    { t: 16, v: [106, 94, 100], e: EASE.io },
+    { t: 22, v: [96, 104, 100], e: EASE.io },
+    { t: 28, v: [100, 100, 100], e: EASE.io },
+    { t: 84, v: [100, 100, 100], e: EASE.io },
+    { t: 90, v: [55, 55, 100], e: EASE.in },
+    { t: L, v: [55, 55, 100] },
+  ]);
+  const alpha = track([
+    { t: 0, v: [0], e: EASE.io },
+    { t: 10, v: [100], e: EASE.io },
+    { t: 84, v: [100], e: EASE.io },
+    { t: 90, v: [0], e: EASE.in },
+    { t: L, v: [0] },
+  ]);
+  const C = [32, 31];
+  const dots = [-9, 0, 9].map((dx, i) => layer(`dot${i}`, L, [grp('dot', [
+    ell([dx, 0], [6.4, 6.4]),
+    fill(hex(COL.teal)),
+  ], {
+    p: sampled((t) => [0, -3 * (0.5 + 0.5 * Math.sin((TAU * 2 * t) / L - i * 0.9))], L, 16),
+  })], { p: [...C, 0], s: scale, o: alpha }));
+  const bubble = layer('bubble', L, [
+    grp('body', [rect([0, 0], [46, 30], 15), fill(hex(COL.white))]),
+    // Separate group: its own fill, so winding order against the body cannot punch a hole.
+    grp('tail', [shape(poly([[-8, 2], [-22, 23], [-2, 12]])), fill(hex(COL.white))]),
+  ], { p: [...C, 0], s: scale, o: alpha });
+  return [...dots, bubble];
+}
+
+// ---------------------------------------------------------------- splash (400x400, plays once, holds)
+/**
+ * Choreography (frames at 60 fps):
+ *   0-36    dot pops in with a spring; teal ring pulses out once
+ *   27-72   dot stretches into the 220x64 black pill with overshoot; equaliser bars 42-90
+ *   57-96   sand island rises with a squash; palm trunk grows 76-104; 5 fronds fan out 92-130
+ *   60-124  two sky ripple arcs spread on the lagoon line under the island
+ *   102-156 sun peeks behind the palm, 4 sparkles twinkle, pill bobs once
+ *   156-204 hold: nothing moves; final pose is reached at frame 156 (2.60 s)
+ */
+function splash(L) {
+  const CX = 200;
+  const PILL_Y = 104;
+  const ISLAND_Y = 304;
+  const CROWN = [208, 236];
+  const TEAL_RIM = hex(COL.teal);
+
+  const ring = layer('ring', L, [grp('ring', [
+    ell([0, 0], track([
+      { t: 4, v: [14, 14], e: EASE.out },
+      { t: 36, v: [130, 130], e: EASE.out },
+      { t: L, v: [130, 130] },
+    ])),
+    stroke(TEAL_RIM, 2),
+  ])], {
+    p: [CX, PILL_Y, 0],
+    o: track([{ t: 0, v: [0] }, { t: 4, v: [70], e: EASE.io }, { t: 36, v: [0], e: EASE.io }, { t: L, v: [0] }]),
+  });
+
+  // Pill (dot -> island pill) with its equaliser bars. Bars share the pill's pop and bob.
+  const BARS = [
+    { x: -48, c: hex(COL.tealLight), keys: [[42, 8], [50, 44], [58, 16], [66, 40], [76, 22], [90, 26]] },
+    { x: -16, c: hex(COL.white), keys: [[42, 8], [52, 30], [60, 48], [69, 18], [80, 38], [90, 34]] },
+    { x: 16, c: hex(COL.tealLight), keys: [[42, 8], [49, 36], [57, 14], [65, 50], [75, 30], [90, 22]] },
+    { x: 48, c: hex(COL.white), keys: [[42, 8], [54, 22], [63, 44], [72, 12], [82, 34], [90, 30]] },
+  ];
+  const bars = BARS.map((b, i) => grp(`bar${i}`, [
+    rect([b.x, 0], track(b.keys.map(([t, h]) => ({ t, v: [14, h] }))), 7),
+    fill(b.c, track([{ t: 36, v: [0] }, { t: 42, v: [100] }])),
+  ]));
+  // Lottie draws the first shape on top, so the bars come before the body.
+  const pill = layer('pill', L, [
+    ...bars,
+    grp('body', [
+      rect([0, 0],
+        track([{ t: 27, v: [14, 14], e: EASE.out }, { t: 60, v: [236, 70], e: EASE.io }, { t: 72, v: [220, 64] }]),
+        track([{ t: 27, v: [7], e: EASE.out }, { t: 60, v: [35], e: EASE.io }, { t: 72, v: [32] }])),
+      fill(hex('#000000')),
+      stroke(TEAL_RIM, 2, 45),
+    ]),
+  ], {
+    p: track([
+      { t: 102, v: [CX, PILL_Y, 0], e: EASE.io },
+      { t: 126, v: [CX, PILL_Y - 6, 0], e: EASE.io },
+      { t: 146, v: [CX, PILL_Y + 3, 0], e: EASE.io },
+      { t: 156, v: [CX, PILL_Y, 0] },
+    ]),
+    s: track([
+      { t: 0, v: [0, 0, 100], e: EASE.back },
+      { t: 20, v: [100, 100, 100], e: EASE.io },
+      { t: L, v: [100, 100, 100] },
+    ]),
+  });
+
+  // Island: sand dome with a darker underside, palm trunk (trim grow) and 5 fronds (rotate out).
+  const DOME = toPath([
+    { p0: [100, ISLAND_Y], p1: [200, 270], c1: [100, 282], c2: [140, 270] },
+    { p0: [200, 270], p1: [300, ISLAND_Y], c1: [260, 270], c2: [300, 282] },
+    { p0: [300, ISLAND_Y], p1: [100, ISLAND_Y], c1: [300, ISLAND_Y], c2: [100, ISLAND_Y] },
+  ], true);
+  const TRUNK = toPath([{ p0: [200, ISLAND_Y], p1: CROWN, c1: [196, 280], c2: [203, 262] }], false);
+  const FRONDS = [
+    { len: 48, deg: -112, c: '#1E8C7A' },
+    { len: 56, deg: -62, c: '#14665A' },
+    { len: 60, deg: -14, c: '#1E8C7A' },
+    { len: 52, deg: 38, c: '#14665A' },
+    { len: 46, deg: 84, c: '#1E8C7A' },
+  ];
+  const frond = (len) => toPath([
+    { p0: [0, 0], p1: [0, -len], c1: [-9, -len * 0.25], c2: [-9, -len * 0.8] },
+    { p0: [0, -len], p1: [0, 0], c1: [9, -len * 0.8], c2: [9, -len * 0.25] },
+  ], true);
+  const island = layer('island', L, [
+    // First shape draws on top: crown and fronds over the dome, dome over the underside and trunk.
+    grp('crown', [ell(CROWN, [14, 14]), fill(hex('#14665A'))]),
+    ...FRONDS.map((f, i) => grp(`frond${i}`, [shape(frond(f.len)), fill(hex(f.c))], {
+      p: CROWN,
+      r: track([{ t: 92 + i * 4, v: [0], e: EASE.back }, { t: 114 + i * 4, v: [f.deg] }]),
+    })),
+    grp('dome', [shape(DOME), fill(hex(COL.sand))]),
+    grp('underside', [ell([200, 306], [206, 16]), fill(hex('#D9BC86'))]),
+    grp('trunk', [
+      shape(TRUNK),
+      trim(0, track([{ t: 76, v: [0], e: EASE.out }, { t: 104, v: [100] }])),
+      stroke(hex('#B5793F'), 6),
+    ]),
+  ], {
+    a: [CX, ISLAND_Y, 0],
+    o: track([{ t: 0, v: [0] }, { t: 56, v: [0] }, { t: 57, v: [100] }]),
+    p: track([
+      { t: 57, v: [CX, 400, 0], e: EASE.back },
+      { t: 84, v: [CX, ISLAND_Y, 0], e: EASE.io },
+      { t: L, v: [CX, ISLAND_Y, 0] },
+    ]),
+    s: track([
+      { t: 57, v: [94, 108, 100], e: EASE.io },
+      { t: 80, v: [118, 84, 100], e: EASE.io },
+      { t: 96, v: [100, 100, 100] },
+    ]),
+  });
+
+  // Coral sun peeks up behind the palm (drawn after the island, so it sits behind it).
+  const sun = layer('sun', L, [grp('disc', [ell([0, 0], [52, 52]), fill(hex(COL.coral))])], {
+    p: track([
+      { t: 102, v: [250, 320, 0], e: EASE.back },
+      { t: 126, v: [250, 226, 0], e: EASE.io },
+      { t: L, v: [250, 226, 0] },
+    ]),
+    o: track([{ t: 0, v: [0] }, { t: 101, v: [0] }, { t: 108, v: [100] }]),
+  });
+
+  // Sparkles: scale pulse + quarter turn, staggered, all settled by frame 156.
+  const SPARKS = [[96, 84, 9, 102], [312, 96, 7, 110], [116, 226, 6, 118], [298, 190, 8, 126]];
+  const sparks = SPARKS.map(([x, y, R, t0], i) => layer(`spark${i}`, L, [grp('star', [
+    shape(sparkle(R)), fill(hex(i % 2 ? COL.white : COL.starSand)),
+  ])], {
+    p: [x, y, 0],
+    s: track([
+      { t: t0, v: [0, 0, 100], e: EASE.back },
+      { t: t0 + 18, v: [100, 100, 100], e: EASE.io },
+      { t: L, v: [100, 100, 100] },
+    ]),
+    r: track([{ t: t0, v: [0] }, { t: t0 + 28, v: [90] }, { t: L, v: [90] }]),
+  }));
+
+  // Ripples on the lagoon line: lower half of an ellipse, expanding and fading once.
+  const ripple = (t0, y) => layer(`ripple${t0}`, L, [grp('arc', [
+    shape(ellArc(0, 0, 100, 9, 0, Math.PI)),
+    stroke(hex(COL.sky), 2),
+  ])], {
+    p: [CX, y, 0],
+    s: track([
+      { t: t0, v: [55, 55, 100], e: EASE.out },
+      { t: t0 + 58, v: [150, 150, 100], e: EASE.io },
+      { t: L, v: [150, 150, 100] },
+    ]),
+    o: track([
+      { t: t0, v: [0], e: EASE.io },
+      { t: t0 + 14, v: [70], e: EASE.io },
+      { t: t0 + 58, v: [0] },
+    ]),
+  });
+
+  // Top of the array is drawn on top: sparkles, pill, island, sun, ripples, then the pulse ring.
+  return [...sparks, pill, island, sun, ripple(60, 306), ripple(70, 318), ring];
+}
+
 // ---------------------------------------------------------------- build table (scene order)
+const DESIGN_ONLY = new Set(['lottie_equalizer', 'lottie_message']);
+
 const SPECS = [
+  { name: 'lottie_equalizer', w: 48, h: 48, L: sec(2), layers: equalizer },
   { name: 'lottie_weather_sun', w: 96, h: 96, L: sec(4), layers: sunScene },
   { name: 'lottie_weather_moon', w: 96, h: 96, L: sec(4), layers: moonScene },
   { name: 'lottie_weather_partly', w: 96, h: 96, L: sec(4), layers: partlyScene },
@@ -499,6 +713,8 @@ const SPECS = [
   { name: 'lottie_ticket_reopen', w: 96, h: 96, L: sec(1.6), layers: ticket },
   { name: 'lottie_success_check', w: 96, h: 96, L: sec(1.2), layers: successScene },
   { name: 'lottie_loading', w: 48, h: 48, L: sec(1.2), layers: loadingScene },
+  { name: 'lottie_message', w: 64, h: 64, L: sec(1.6), layers: messageScene },
+  { name: 'lottie_splash', w: 400, h: 400, L: sec(3.4), layers: splash },
 ];
 
 // ---------------------------------------------------------------- output
@@ -526,7 +742,8 @@ SPECS.forEach((spec, idx) => {
   if (exportText.includes('"sid"') || exportText.includes('"slots"') || exportText.includes('"nm":"bg"')) {
     throw new Error(`${spec.name}: export leaks sid, slots or bg layer`);
   }
-  writeFileSync(join(RAW_DIR, `${spec.name}.json`), exportText);
+  // Previewed in the player, but the app draws these in code (cheaper) or does not use them: not shipped.
+  if (!DESIGN_ONLY.has(spec.name)) writeFileSync(join(RAW_DIR, `${spec.name}.json`), exportText);
 
   const sceneDir = join(PLAYER_DIR, `scene-${idx + 1}`);
   mkdirSync(sceneDir, { recursive: true });
