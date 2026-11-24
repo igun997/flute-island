@@ -134,7 +134,7 @@ fun IslandSurface(
     val rows = data.tickets.size
     val size = IslandSizes.pill(presentation, metrics, rows, data.jiraConfigured, data.recent.size)
     val onSettledNow by rememberUpdatedState(onSettled)
-    val sizeSpec = spring<androidx.compose.ui.unit.Dp>(dampingRatio = 0.86f, stiffness = 420f)
+    val sizeSpec = spring<androidx.compose.ui.unit.Dp>(dampingRatio = 0.84f, stiffness = 600f)
     val w by animateDpAsState(size.width, sizeSpec, label = "islandW")
     val h by animateDpAsState(size.height, sizeSpec, label = "islandH")
     val latest by rememberUpdatedState(actions)
@@ -221,7 +221,7 @@ fun IslandSurface(
                     contentKey = { IslandSizes.key(it) },
                     // Content is centred in the pill, so while the pill grows or shrinks it never slides in from a side,
                     // and the pill's own spring is the only size animation (no nested SizeTransform).
-                    transitionSpec = { (fadeIn(tween(150, delayMillis = 60)) togetherWith fadeOut(tween(80))).using(null) },
+                    transitionSpec = { (fadeIn(tween(120, delayMillis = 25)) togetherWith fadeOut(tween(70))).using(null) },
                     contentAlignment = Alignment.TopCenter,
                     label = "islandContent",
                 ) { p ->

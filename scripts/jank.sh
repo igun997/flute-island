@@ -5,7 +5,7 @@ P=dev.igun997.fluteisland
 S="$(dirname "$0")/dev.sh"
 adb shell dumpsys gfxinfo $P reset >/dev/null
 for i in 1 2 3; do
-  $S inject --es kind notice --es app whatsapp --es title Rina --es text "Halo_besok_jadi_$i"; sleep 7
+  $S inject --es kind notice --es app whatsapp --es title "'Angga Kuda'" --es text "Halo_besok_jadi_$i"; sleep 7
   $S inject --es kind jira --es key OPS-4$i --es summary "Checkout_fails"; sleep 9
 done
 $S inject --es kind fakemedia; sleep 3

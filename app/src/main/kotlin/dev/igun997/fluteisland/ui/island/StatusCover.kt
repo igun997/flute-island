@@ -2,6 +2,8 @@ package dev.igun997.fluteisland.ui.island
 
 import android.text.format.DateFormat
 import androidx.compose.foundation.Canvas
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -47,7 +49,7 @@ private val Dim = Color(0x40FFFFFF)
  * per SIM and battery on the right. The camera's middle stays empty (the island pill sits there).
  */
 @Composable
-fun StatusCoverBar(status: StatusState, shadeOpen: Boolean, barHeight: Dp, modifier: Modifier = Modifier) {
+fun StatusCoverBar(status: StatusState, shadeOpen: Boolean, barHeight: Dp, pendingApps: List<String> = emptyList(), modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val time by produceState("", context) {
         val format = DateFormat.getTimeFormat(context)
@@ -59,7 +61,9 @@ fun StatusCoverBar(status: StatusState, shadeOpen: Boolean, barHeight: Dp, modif
     }
     // With the shade pulled down the bar grows to also hide the shade's own clock row, and rounds its lower corners, so it
     // reads as a floating capsule over the shade instead of a hard strip. Both follow one spring.
-    val open by animateFloatAsState(if (shadeOpen) 1f else 0f, spring(dampingRatio = 0.8f, stiffness = 380f), label = "coverOpen")
+    // A spring overshoots, and a corner radius below zero crashes the whole process: always clamp.
+    val openRaw by animateFloatAsState(if (shadeOpen) 1f else 0f, spring(dampingRatio = 0.8f, stiffness = 380f), label = "coverOpen")
+    val open = openRaw.coerceIn(0f, 1f)
     Box(modifier.fillMaxSize()) {
         Row(
             Modifier.fillMaxWidth().height(barHeight + 26.dp * open)
@@ -69,6 +73,8 @@ fun StatusCoverBar(status: StatusState, shadeOpen: Boolean, barHeight: Dp, modif
             Column(Modifier.weight(1f)) {
                 Row(Modifier.fillMaxWidth().height(barHeight), verticalAlignment = Alignment.CenterVertically) {
                     Label(time, Ink, 13, FontWeight.SemiBold)
+                    // Which apps have something waiting (the island's Recent list): the covered bar's notification icons.
+                    PendingApps(pendingApps)
                     Spacer(Modifier.weight(1f))
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                         status.sims.forEach { SignalBars(it.level) }
@@ -85,6 +91,23 @@ fun StatusCoverBar(status: StatusState, shadeOpen: Boolean, barHeight: Dp, modif
         }
     }
 }
+
+@Composable
+private fun PendingApps(packages: List<String>) {
+    if (packages.isEmpty()) return
+    val shown = packages.take(MAX_ICONS)
+    Row(Modifier.padding(start = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        shown.forEach { pkg ->
+            val icon = rememberAppIcon(pkg)
+            Box(Modifier.size(17.dp).clip(RoundedCornerShape(5.dp)).background(Color(0x22FFFFFF))) {
+                if (icon != null) Image(icon, null, Modifier.fillMaxSize())
+            }
+        }
+        if (packages.size > MAX_ICONS) Label("+${packages.size - MAX_ICONS}", Dim.copy(alpha = 0.9f), 11, FontWeight.Medium)
+    }
+}
+
+private const val MAX_ICONS = 4
 
 @Composable
 private fun SignalBars(level: Int) {

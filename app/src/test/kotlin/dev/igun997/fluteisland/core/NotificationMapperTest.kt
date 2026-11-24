@@ -16,7 +16,7 @@ class NotificationMapperTest {
     fun whatsappMessageBecomesWhatsappAlert() {
         val a = map(raw())!!
         assertEquals(Source.WHATSAPP, a.source)
-        assertEquals("Rina", a.title)
+        assertEquals("Angga Kuda", a.title)
         assertEquals("Besok jadi?", a.text)
         assertEquals("key-com.whatsapp", a.id)
     }

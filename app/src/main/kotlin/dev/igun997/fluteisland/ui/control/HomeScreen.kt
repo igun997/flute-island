@@ -42,6 +42,9 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.produceState
+import dev.igun997.fluteisland.data.CrashGuard
+import dev.igun997.fluteisland.service.Repair
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -117,6 +120,21 @@ fun HomeScreen(dark: Boolean, onNavigate: (Screen) -> Unit) {
     val overlayOk = remember(tick) { Perms.islandHostEnabled(ctx) }
     val listenerOk = remember(tick) { Perms.listenerGranted(ctx) }
     val ready = overlayOk && listenerOk
+    // Switched on in settings but not actually running: Android marks a crashed accessibility service and never restarts it.
+    // Give the services a few seconds to come up before calling it stopped, and try to revive it.
+    val stalled by produceState(false, ready, connected, tick) {
+        value = false
+        if (ready && !connected) {
+            kotlinx.coroutines.delay(4_000)
+            value = true
+        }
+    }
+    LaunchedEffect(stalled) {
+        if (stalled) {
+            Repair.rebindListener(ctx)
+            Repair.restartHost(ctx)
+        }
+    }
 
     val gridState = rememberLazyStaggeredGridState()
     val parallax by remember { derivedStateOf { if (gridState.firstVisibleItemIndex == 0) gridState.firstVisibleItemScrollOffset.toFloat() else 0f } }
@@ -130,12 +148,12 @@ fun HomeScreen(dark: Boolean, onNavigate: (Screen) -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         item(span = StaggeredGridItemSpan.FullLine) {
-            Hero(dark, ready, parallax, Modifier.layout16())
+            Hero(dark, ready, stalled, parallax, Modifier.layout16())
         }
         item(span = StaggeredGridItemSpan.FullLine) {
             PreviewCard(dark, Modifier.entrance(1))
         }
-        item { SetupCard(overlayOk, listenerOk, connected, overlayShown, Modifier.entrance(2)) }
+        item { SetupCard(overlayOk, listenerOk, connected, stalled, Modifier.entrance(2)) }
         item { GesturesCard(Modifier.entrance(3)) }
         item { ModeCard(settings.mode, Modifier.entrance(3)) }
         item { NotificationsCard(onNavigate, Modifier.entrance(4)) }
@@ -157,7 +175,7 @@ private fun Modifier.layout16(): Modifier = this.layout { measurable, constraint
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
-private fun Hero(dark: Boolean, ready: Boolean, parallax: Float, modifier: Modifier) {
+private fun Hero(dark: Boolean, ready: Boolean, stalled: Boolean, parallax: Float, modifier: Modifier) {
     val c = LocalControlColors.current
     val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     Box(modifier.fillMaxWidth().height(260.dp + topInset).clip(RoundedCornerShape(bottomStart = 36.dp, bottomEnd = 36.dp))) {
@@ -187,9 +205,13 @@ private fun Hero(dark: Boolean, ready: Boolean, parallax: Float, modifier: Modif
         }
         Column(Modifier.align(Alignment.BottomStart).padding(horizontal = 24.dp, vertical = 20.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                StatusDot(if (ready) c.success else c.coral)
+                val good = ready && !stalled
+                StatusDot(if (good) c.success else c.coral)
                 Spacer(Modifier.width(8.dp))
-                Text(if (ready) "Island is live" else "Setup needed", color = if (ready) c.success else c.coral, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text(
+                    if (stalled) "Island stopped" else if (ready) "Island is live" else "Setup needed",
+                    color = if (good) c.success else c.coral, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                )
             }
             Spacer(Modifier.height(4.dp))
             Text("Flute Island", color = c.text, fontSize = 34.sp, fontWeight = FontWeight.Bold)
@@ -230,7 +252,7 @@ private fun PreviewCard(dark: Boolean, modifier: Modifier) {
         when (demo) {
             Demo.IDLE -> Unit
             Demo.MUSIC -> controller.setMedia(demoMedia(), now)
-            Demo.MESSAGE -> controller.postAlert(Alert("demo", Source.WHATSAPP, "WhatsApp", "com.whatsapp", "Rina", "Besok jadi ketemu jam 10?", now), now)
+            Demo.MESSAGE -> controller.postAlert(Alert("demo", Source.WHATSAPP, "WhatsApp", "com.whatsapp", "Angga Kuda", "Besok jadi ketemu jam 10?", now), now)
             Demo.JIRA -> controller.postAlert(Alert("demo-j", Source.JIRA, "Jira", "com.atlassian.android.jira.core", "OPS-42 reopened", "Checkout fails on Samsung A-series", now), now)
             Demo.WEATHER -> controller.setPanel(Panel.WEATHER, now)
             Demo.TOOLS -> controller.setPanel(Panel.TOOLS, now)
@@ -278,14 +300,14 @@ private fun PreviewCard(dark: Boolean, modifier: Modifier) {
 // --- Cards ----------------------------------------------------------------------------------
 
 @Composable
-private fun SetupCard(overlayOk: Boolean, listenerOk: Boolean, connected: Boolean, overlayShown: Boolean, modifier: Modifier) {
+private fun SetupCard(overlayOk: Boolean, listenerOk: Boolean, connected: Boolean, stalled: Boolean, modifier: Modifier) {
     val c = LocalControlColors.current
     val ctx = LocalContext.current
     FluidCard(modifier) {
         val done = overlayOk && listenerOk
         SectionHeader(
             if (done) "All set" else "Finish setup",
-            if (done) (if (connected) "The island is running" else "Waiting for Android to start the services") else "Two switches make the island work",
+            if (done) (if (connected) "The island is running" else if (stalled) "The island stopped running" else "Starting the island") else "Two switches make the island work",
             Glyphs.Check,
         )
         PermissionRow("Accessibility", "Draws the island above the status bar and spots games. It reads no screen content.", overlayOk) { Perms.openAccessibilitySettings(ctx) }
@@ -297,6 +319,23 @@ private fun SetupCard(overlayOk: Boolean, listenerOk: Boolean, connected: Boolea
         }
         Spacer(Modifier.height(6.dp))
         PermissionRow("Notification access", "Reads WhatsApp, Spotify and other alerts", listenerOk) { Perms.openListenerSettings(ctx) }
+        if (stalled) {
+            val crash = remember { CrashGuard.last(ctx) }
+            Spacer(Modifier.height(8.dp))
+            Hint(
+                "Android switched the service off after " + (if (crash != null) "an error (${crash.second})." else "stopping it.") +
+                    " " + if (Repair.canSelfRepair(ctx)) "Restarting it for you now." else "Turn Flute Island off and on again in Accessibility to bring it back.",
+            )
+            Spacer(Modifier.height(8.dp))
+            PrimaryButton("Restart the island", Modifier.fillMaxWidth()) {
+                Repair.rebindListener(ctx)
+                if (!Repair.restartHost(ctx)) Perms.openAccessibilitySettings(ctx)
+            }
+            if (!Repair.canSelfRepair(ctx)) {
+                Spacer(Modifier.height(6.dp))
+                Hint("To let it restart itself, run once on a computer: adb shell pm grant dev.igun997.fluteisland android.permission.WRITE_SECURE_SETTINGS")
+            }
+        }
         if (done) {
             Spacer(Modifier.height(10.dp))
             Hint("Phone kills it in the background? Exempt Flute Island from battery optimisation.")
@@ -407,6 +446,13 @@ private fun NotificationsCard(onNavigate: (Screen) -> Unit, modifier: Modifier) 
         SwitchRow("Take over notifications", "The island replaces the shade: notifications are cleared once shown, and kept under Recent", settings.takeOver || settings.allApps) { v ->
             if (!settings.allApps) SettingsStore.update { it.copy(takeOver = v) }
         }
+        if (settings.takeOver || settings.allApps) {
+            SwitchRow(
+                "Hide the original pop-up too",
+                "Android still shows its own pop-up a moment after a notification is cleared, so you would see it twice. The island swipes that pop-up away for you.",
+                settings.quietOriginals,
+            ) { v -> SettingsStore.update { it.copy(quietOriginals = v) } }
+        }
         SwitchRow("Now playing", "Spotify and other players", settings.mediaEnabled) { v -> SettingsStore.update { it.copy(mediaEnabled = v) } }
         if (!settings.allApps) NavRow("Apps", "$blocked muted", "Choose which apps may use the island") { onNavigate(Screen.APPS) }
         SliderRow("Alert stays for", "${settings.alertSeconds} s", settings.alertSeconds.toFloat(), 2f..12f, steps = 9) { v ->
@@ -488,7 +534,7 @@ private fun TryItCard(ready: Boolean, modifier: Modifier) {
         SectionHeader("Try it", if (ready) "Fires the real island at the top of your screen" else "Finish setup first", Glyphs.Play)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             SecondaryButton("Message") {
-                IslandRuntime.post(Alert("test:msg", Source.WHATSAPP, "WhatsApp", "com.whatsapp", "Rina", "Besok jadi ketemu jam 10?", System.currentTimeMillis()))
+                IslandRuntime.post(Alert("test:msg", Source.WHATSAPP, "WhatsApp", "com.whatsapp", "Angga Kuda", "Besok jadi ketemu jam 10?", System.currentTimeMillis()))
             }
             SecondaryButton("Jira ticket") {
                 IslandRuntime.post(Alert("test:jira", Source.JIRA, "Jira", "com.atlassian.android.jira.core", "OPS-42 reopened", "Checkout fails on Samsung A-series", System.currentTimeMillis()))

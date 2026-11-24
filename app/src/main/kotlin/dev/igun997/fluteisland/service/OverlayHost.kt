@@ -248,6 +248,18 @@ class OverlayHost(private val service: AccessibilityService) : LifecycleOwner, S
         IslandRuntime.setOverlayShown(false)
     }
 
+    @Volatile private var passthrough = false
+
+    /** Lets every touch through the island window for a moment (to inject a gesture into the window beneath it). */
+    fun setPassthrough(on: Boolean) {
+        passthrough = on
+        val v = view ?: return
+        val params = lp ?: return
+        val hidden = curW <= 1 && curH <= 1
+        params.flags = (if (hidden) FLAGS_HIDDEN else FLAGS_SHOWN) or (if (on) WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE else 0)
+        runCatching { wm.updateViewLayout(v, params) }
+    }
+
     private fun applyLayout(wPx: Int, hPx: Int, m: IslandMetrics, set: Settings) {
         val v = view ?: return
         val params = lp ?: return
@@ -261,7 +273,7 @@ class OverlayHost(private val service: AccessibilityService) : LifecycleOwner, S
         val hidden = wPx <= 0 || hPx <= 0
         params.width = if (hidden) 1 else wPx
         params.height = if (hidden) 1 else hPx
-        params.flags = if (hidden) FLAGS_HIDDEN else FLAGS_SHOWN
+        params.flags = (if (hidden) FLAGS_HIDDEN else FLAGS_SHOWN) or (if (passthrough) WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE else 0)
         params.x = offset.coerceIn(-room, room)
         params.y = ((m.top + set.topOffsetDp) * eff).roundToInt()
         curW = params.width; curH = params.height
@@ -409,7 +421,7 @@ class OverlayHost(private val service: AccessibilityService) : LifecycleOwner, S
 
     companion object {
         /** Frames to wait after enlarging the window before the pill starts to grow. */
-        const val GROW_LEAD_MS = 70L
+        const val GROW_LEAD_MS = 40L
         private const val PRIVATE_FLAG_NO_MOVE_ANIMATION = 0x00000040
 
         private const val FLAGS_SHOWN = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or

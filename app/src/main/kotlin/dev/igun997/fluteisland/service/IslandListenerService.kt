@@ -27,8 +27,10 @@ class IslandListenerService : NotificationListenerService() {
         super.onListenerConnected()
         SettingsStore.init(this)
         IslandRuntime.setListenerConnected(true)
+        // We restart after a crash too: if the accessibility service did not come back with us, revive it.
+        Repair.healAfter(this)
         IslandRuntime.cancelShellNotifications = {
-            activeNotifications.filter { it.packageName == "com.android.shell" }.forEach { cancelNotification(it.key) }
+            activeNotifications.filter { it.packageName == "com.android.shell" || it.packageName == packageName }.forEach { cancelNotification(it.key) }
         }
         media = MediaWatcher(this, ComponentName(this, IslandListenerService::class.java)) { info, controls ->
             if (SettingsStore.value.mediaEnabled) {
@@ -77,7 +79,10 @@ class IslandListenerService : NotificationListenerService() {
                 IslandRuntime.post(decision.alert, sbn.notification.contentIntent)
                 // "Take over" (always, in every-app mode): the island is the only place it shows up. The tap action
                 // was captured above, so tapping the island still opens the right chat.
-                if (set.takeOver || set.allApps) removeFromShade(sbn.key)
+                if (set.takeOver || set.allApps) {
+                    if (set.quietOriginals) IslandRuntime.sweepPopup?.invoke()
+                    removeFromShade(sbn.key)
+                }
             }
         }
     }

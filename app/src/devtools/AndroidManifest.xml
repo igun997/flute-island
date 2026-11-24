@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <application android:networkSecurityConfig="@xml/debug_network_security">
         <!-- Debug-only hook so the e2e script can drive the island without a real WhatsApp/Spotify. -->
         <receiver

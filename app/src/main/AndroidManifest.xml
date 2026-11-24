@@ -1,10 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Optional: lets the covered status bar show signal for each SIM. Without it only the default SIM is shown. -->
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!--
+      Optional, never requested in the UI: when granted once over adb the app can switch its own accessibility service
+      off and on again, which is the only way to revive one that Android marked as crashed.
+      adb shell pm grant dev.igun997.fluteisland android.permission.WRITE_SECURE_SETTINGS
+    -->
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS" tools:ignore="ProtectedPermissions" />
 
     <!-- Lets the app-filter screen list launchable apps without the broad QUERY_ALL_PACKAGES permission. -->
     <queries>
@@ -15,6 +23,7 @@
     </queries>
 
     <application
+        android:name=".FluteApp"
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -39,6 +48,13 @@
                 <data android:scheme="fluteisland" android:host="jira" />
             </intent-filter>
         </activity>
+
+        <receiver android:name=".service.RestartReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
         <service
             android:name=".service.IslandAccessibilityService"

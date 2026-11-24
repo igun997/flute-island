@@ -27,6 +27,8 @@ data class Settings(
     val blendCamera: Boolean = true,
     /** Remove a notification from the shade once the island has shown it (the island becomes the only surface). */
     val takeOver: Boolean = true,
+    /** Also turn the original pop-up of taken-over apps down to a normal notification (Android keeps a cancelled pop-up on screen for a while). */
+    val quietOriginals: Boolean = true,
     /** Every app goes through the island (block list ignored) and nothing is left in the shade except live controls. */
     val allApps: Boolean = false,
     /** Draw the island's own black status bar (clock, wifi, signal per SIM, battery) over the real one. */
@@ -129,6 +131,7 @@ object SettingsStore {
             haptics = prefs.getBoolean("haptics", d.haptics),
             blendCamera = prefs.getBoolean("blendCamera", d.blendCamera),
             takeOver = prefs.getBoolean("takeOver", d.takeOver),
+            quietOriginals = prefs.getBoolean("quietOriginals", d.quietOriginals),
             allApps = prefs.getBoolean("allApps", d.allApps),
             coverStatusBar = prefs.getBoolean("cover", d.coverStatusBar),
             gestureHintSeen = prefs.getBoolean("gestureHint", d.gestureHintSeen),
@@ -168,6 +171,7 @@ object SettingsStore {
             .putBoolean("haptics", s.haptics)
             .putBoolean("blendCamera", s.blendCamera)
             .putBoolean("takeOver", s.takeOver)
+            .putBoolean("quietOriginals", s.quietOriginals)
             .putBoolean("allApps", s.allApps)
             .putBoolean("cover", s.coverStatusBar)
             .putBoolean("gestureHint", s.gestureHintSeen)

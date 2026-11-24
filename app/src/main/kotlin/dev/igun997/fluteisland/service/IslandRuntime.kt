@@ -51,6 +51,10 @@ object IslandRuntime {
 
     /** Pulls the notification shade down, as a swipe from the top edge would. Set by the accessibility service. */
     @Volatile var openShade: (() -> Unit)? = null
+    /** Asks the accessibility service to swipe away the system's own pop-up of a notification the island just took over. */
+    @Volatile var sweepPopup: (() -> Unit)? = null
+    /** While true the island window lets every touch through (used for the instant a gesture is injected beneath it). */
+    @Volatile var setPassthrough: ((Boolean) -> Unit)? = null
 
     /** Whether the app in the foreground declares itself a game. */
     private val _inGame = MutableStateFlow(false)

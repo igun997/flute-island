@@ -70,7 +70,9 @@ class IslandAccessibilityService : AccessibilityService() {
 
         val host = OverlayHost(this).also { it.start(s) }
         overlay = host
+        IslandRuntime.setPassthrough = host::setPassthrough
         IslandRuntime.openShade = { performGlobalAction(GLOBAL_ACTION_NOTIFICATIONS) }
+        IslandRuntime.sweepPopup = ::sweepPopup
         // The cover window has to be added before the pill's so the pill stays above it.
         cover = CoverHost(this).also { c -> c.start(s) { host.bringToFront() } }
         weather = WeatherEngine(this, s).also { it.start() }
@@ -132,6 +134,63 @@ class IslandAccessibilityService : AccessibilityService() {
         )
     }
 
+    private var sweep: kotlinx.coroutines.Job? = null
+
+    /**
+     * Samsung (and Android) show the pop-up of a notification a moment after it arrives, even if it was cancelled in
+     * between. So a taken-over notification would show twice: once as the island, once as the system pop-up. For a few
+     * seconds after a take-over we look for that pop-up (a system UI window that is not the bars) and swipe it away
+     * the way a finger would. Only window geometry and the owner's package name are read, never any text.
+     */
+    private fun sweepPopup() {
+        sweep?.cancel()
+        sweep = scope?.launch {
+            // Keep going until a pop-up was seen and is gone again: it appears after a delay and may need a second swipe.
+            var seen = false
+            repeat(40) {
+                delay(300)
+                when (swipeAwayPopup()) {
+                    true -> seen = true
+                    false -> if (seen) return@launch
+                    null -> Unit
+                }
+            }
+        }
+    }
+
+    /** True: found a pop-up and swiped it. False: none showing. Null: cannot look right now (shade open). */
+    private suspend fun swipeAwayPopup(): Boolean? {
+        if (IslandRuntime.shadeOpen.value) return null
+        val screenW = resources.displayMetrics.widthPixels
+        val rect = android.graphics.Rect()
+        val popup = windows?.firstOrNull { w ->
+            w.getBoundsInScreen(rect)
+            // Not an app, keyboard, bar or accessibility overlay; small, near the top, and owned by system UI.
+            w.type !in 1..4 && rect.top in 0..300 && rect.width() < screenW * 0.97f && rect.height() in 1..320 &&
+                w.root?.packageName == "com.android.systemui"
+        } ?: return false
+        popup.getBoundsInScreen(rect)
+        val x = rect.exactCenterX()
+        val path = android.graphics.Path().apply {
+            moveTo(x, rect.bottom - 10f)
+            lineTo(x, (rect.top - 60f).coerceAtLeast(2f))
+        }
+        val done = kotlinx.coroutines.CompletableDeferred<Boolean>()
+        IslandRuntime.setPassthrough?.invoke(true) // our own window must not catch it
+        val sent = dispatchGesture(
+            android.accessibilityservice.GestureDescription.Builder()
+                .addStroke(android.accessibilityservice.GestureDescription.StrokeDescription(path, 0, 110)).build(),
+            object : GestureResultCallback() {
+                override fun onCompleted(gestureDescription: android.accessibilityservice.GestureDescription?) { done.complete(true) }
+                override fun onCancelled(gestureDescription: android.accessibilityservice.GestureDescription?) { done.complete(false) }
+            },
+            null,
+        )
+        if (sent) kotlinx.coroutines.withTimeoutOrNull(1_000) { done.await() }
+        IslandRuntime.setPassthrough?.invoke(false)
+        return true
+    }
+
     private fun statusBarHeight(): Int {
         val id = resources.getIdentifier("status_bar_height", "dimen", "android")
         return if (id > 0) resources.getDimensionPixelSize(id) else (24 * resources.displayMetrics.density).toInt()
@@ -159,6 +218,8 @@ class IslandAccessibilityService : AccessibilityService() {
         weather?.stop(); weather = null
         cover?.destroy(); cover = null
         IslandRuntime.openShade = null
+        IslandRuntime.sweepPopup = null
+        IslandRuntime.setPassthrough = null
         jira?.stop(); jira = null
         overlay?.destroy(); overlay = null
         scope?.cancel(); scope = null

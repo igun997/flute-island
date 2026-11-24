@@ -12,7 +12,7 @@ fun ticket(key: String) = Ticket(key, "Summary $key", "Reopened", "High", "https
 
 fun raw(
     pkg: String = "com.whatsapp",
-    title: String? = "Rina",
+    title: String? = "Angga Kuda",
     text: String? = "Besok jadi?",
     big: String? = null,
     category: String? = "msg",

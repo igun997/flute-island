@@ -27,7 +27,7 @@ import dev.igun997.fluteisland.service.IslandRuntime
 /**
  * Debug-only remote control, used by scripts/e2e.sh:
  *   adb shell am broadcast -n dev.igun997.fluteisland/.debug.InjectReceiver \
- *       -a dev.igun997.fluteisland.debug.INJECT --es kind notice --es app whatsapp --es title Rina --es text "Halo"
+ *       -a dev.igun997.fluteisland.debug.INJECT --es kind notice --es app whatsapp --es title "'Angga Kuda'" --es text "Halo"
  */
 class InjectReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -43,7 +43,7 @@ class InjectReceiver : BroadcastReceiver() {
                     Alert(
                         id = "debug:" + s("id", System.nanoTime().toString()), source = source,
                         appName = s("appName", if (source == Source.WHATSAPP) "WhatsApp" else "Chrome"),
-                        packageName = pkg, title = s("title", "Rina"), text = s("text", "Besok jadi ketemu?"), postedAt = now,
+                        packageName = pkg, title = s("title", "Angga Kuda"), text = s("text", "Besok jadi ketemu?"), postedAt = now,
                     ),
                 )
             }
@@ -89,6 +89,18 @@ class InjectReceiver : BroadcastReceiver() {
             "block" -> SettingsStore.update { it.copy(blockedPackages = it.blockedPackages + s("value")) }
             "unblock" -> SettingsStore.update { it.copy(blockedPackages = it.blockedPackages - s("value")) }
             "cover" -> SettingsStore.update { it.copy(coverStatusBar = s("value", "true") == "true") }
+            "quietoriginals" -> SettingsStore.update { it.copy(quietOriginals = s("value", "true") == "true") }
+            "hupost" -> {
+                val nm = context.getSystemService(android.app.NotificationManager::class.java)
+                nm.createNotificationChannel(android.app.NotificationChannel("hu_test", "Heads-up test", android.app.NotificationManager.IMPORTANCE_HIGH))
+                nm.notify(777, android.app.Notification.Builder(context, "hu_test").setSmallIcon(android.R.drawable.ic_dialog_info).setContentTitle("HU probe").setContentText("pop-up body").build())
+                // Same timing as the listener's take-over: cancel shortly after the post.
+                val after = s("cancel_ms", "").toLongOrNull()
+                if (after != null) android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({ IslandRuntime.cancelShellNotifications?.invoke(); if (s("sweep", "false") == "true") IslandRuntime.sweepPopup?.invoke() }, after)
+            }
+            // Lets a test phone ignore real notifications (the owner's own) while a test runs.
+            "realnotifs" -> SettingsStore.update { it.copy(notificationsEnabled = s("value", "true") == "true") }
+            "crash" -> android.os.Handler(android.os.Looper.getMainLooper()).post { throw IllegalStateException("e2e simulated crash") }
             "quiet" -> SettingsStore.update { it.copy(quietMode = s("value", "true") == "true") }
             "scale" -> SettingsStore.update { it.copy(sizeScale = s("value", "1").toFloat()) }
             "clear" -> { c.clearAlerts(); c.setPanel(Panel.NONE, now) }

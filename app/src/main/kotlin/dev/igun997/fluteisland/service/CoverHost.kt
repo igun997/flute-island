@@ -10,6 +10,7 @@ import android.view.View
 import android.view.WindowManager
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
@@ -99,7 +100,10 @@ class CoverHost(private val service: AccessibilityService) : LifecycleOwner, Sav
             setContent {
                 val status by indicators.state.collectAsState()
                 val shade by IslandRuntime.shadeOpen.collectAsState()
-                StatusCoverBar(status, shadeOpen = shade, barHeight = (barPx / service.resources.displayMetrics.density).dp)
+                val islandState by IslandRuntime.controller.state.collectAsState()
+                // Newest first, one icon per app.
+                val pending = remember(islandState.recent) { islandState.recent.map { it.packageName }.distinct() }
+                StatusCoverBar(status, shadeOpen = shade, barHeight = (barPx / service.resources.displayMetrics.density).dp, pendingApps = pending)
             }
         }
         // Taller than the bar: while the shade is open the bar grows to hide the shade's own clock row and rounds its corners.
