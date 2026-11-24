@@ -61,12 +61,16 @@ jobs:
           echo "FLUTE_KEY_PASSWORD=${{ secrets.ANDROID_KEY_PASSWORD }}" >> "$GITHUB_ENV"
           echo "signed=true" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 21
 
-      - uses: android-actions/setup-android@v3
+      - name: Android SDK
+        # The runner image ships the SDK; make sure the platform and build tools we need are there and licensed.
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;34.0.0"
 
       - uses: gradle/actions/setup-gradle@v4
 
