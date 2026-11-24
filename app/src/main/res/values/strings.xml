@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Flute Island</string>
+    <string name="a11y_description">Lets Flute Island draw the island above the status bar and notice when a game or fullscreen app is open, so it can stay out of the way. It checks only which app is in front and whether the status bar is showing. It does not read what is on your screen.</string>
+</resources>

@@ -2,3 +2,6 @@ build/
 .gradle/
 .kotlin/
 local.properties
+e2e-out/
+design/assets/originals/*_v*.png
+design/lottie-player/

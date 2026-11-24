@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Window-change events only; no gestures, no key events, no touch exploration. canRetrieveWindowContent is required by
+  Android to list windows (to see whether the status bar is showing); the app only reads window type and geometry.
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeWindowStateChanged|typeWindowsChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagRetrieveInteractiveWindows"
+    android:canRetrieveWindowContent="true"
+    android:description="@string/a11y_description"
+    android:notificationTimeout="150"
+    android:settingsActivity="dev.igun997.fluteisland.MainActivity" />

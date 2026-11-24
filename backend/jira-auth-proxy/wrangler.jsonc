@@ -1,0 +1,12 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "flute-island-auth",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-10-01",
+  "workers_dev": true,
+  "vars": {
+    // Public. Copy it from the Atlassian developer console (Settings > Client ID).
+    "JIRA_CLIENT_ID": ""
+  }
+  // Secret, never committed:  npx wrangler secret put JIRA_CLIENT_SECRET
+}

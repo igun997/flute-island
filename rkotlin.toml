@@ -9,7 +9,7 @@
 # Extra things that must never be uploaded (gitignore syntax). .gitignore is already honoured.
 # Signing keystores, key.properties and local.properties are never uploaded unless you set
 # default_excludes = false.
-exclude = []
+exclude = ["design/lottie-player/node_modules", "backend/**/node_modules", "design/assets/originals"]
 
 [remote]
 # JDK major version on the remote (Temurin, installed under ~/.rkotlin). Default 21.

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:networkSecurityConfig="@xml/debug_network_security">
+        <!-- Debug-only hook so the e2e script can drive the island without a real WhatsApp/Spotify. -->
+        <receiver
+            android:name=".debug.InjectReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="dev.igun997.fluteisland.debug.INJECT" />
+            </intent-filter>
+        </receiver>
+        <!-- e2e fixture: behaves like a game / video player that hides the system bars. -->
+        <activity
+            android:name=".debug.FullscreenActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
+    </application>
+</manifest>
